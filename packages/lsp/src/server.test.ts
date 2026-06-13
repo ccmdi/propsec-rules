@@ -8,6 +8,10 @@ import {
     StreamMessageReader,
     StreamMessageWriter,
     DiagnosticSeverity,
+    CompletionItemKind,
+    type CompletionItem,
+    type Hover,
+    type MarkupContent,
 } from "vscode-languageserver/node";
 import {
     createMessageConnection,
@@ -185,6 +189,177 @@ describe("language server wire test (real JSON-RPC over in-memory streams)", () 
         );
         const last = publishes[publishes.length - 1];
         expect(last.diagnostics).toEqual([]);
+    });
+});
+
+// --- Completion + hover wire tests -----------------------------------------
+
+// Book schema with title (string, required), rating (number), status (string).
+// `status` is also seeded in another note so the value index has entries.
+const CONFIG_CH = JSON.stringify({
+    schemaMappings: [
+        {
+            id: "book",
+            name: "Book",
+            sourceTemplatePath: null,
+            query: "Books/*",
+            enabled: true,
+            fields: [
+                { name: "title", type: "string", required: true },
+                { name: "rating", type: "number", required: false },
+                { name: "status", type: "string", required: false },
+            ],
+        },
+    ],
+    customTypes: [],
+    warnOnUnknownFields: true,
+    allowObsidianProperties: true,
+});
+
+// Empty frontmatter -> KEY context on line 1 (no keys present, so all are offered).
+const NOTE_EMPTY = "---\n\n---\n";
+// A note with title present -> hover target on line 1.
+const NOTE_TITLED = '---\ntitle: "Dune"\n---\n';
+// Seeds a corpus `status` value so the value index is non-empty.
+const NOTE_SEED = "---\nstatus: reading\n---\n";
+
+/** Wire up a server+client duplex pair and run the LSP initialize handshake. */
+async function connectAndInit(root: string): Promise<MessageConnection> {
+    const clientToServer = new PassThrough();
+    const serverToClient = new PassThrough();
+    const serverConnection = createConnection(
+        new StreamMessageReader(clientToServer),
+        new StreamMessageWriter(serverToClient)
+    );
+    startServer(serverConnection);
+
+    const conn = createMessageConnection(
+        new ClientReader(serverToClient),
+        new ClientWriter(clientToServer),
+        NullLogger
+    );
+    conn.listen();
+
+    await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: URI.file(root).toString(),
+        capabilities: {},
+        workspaceFolders: [{ uri: URI.file(root).toString(), name: "vault" }],
+    });
+    await conn.sendNotification("initialized", {});
+    return conn;
+}
+
+describe("completion + hover wire test (real JSON-RPC requests)", () => {
+    let root: string;
+    let client: MessageConnection;
+
+    beforeEach(async () => {
+        root = await mkdtemp(join(tmpdir(), "propsec-lsp-ch-"));
+        await writeFile(join(root, "propsec.config.json"), CONFIG_CH, "utf8");
+        await mkdir(join(root, "Books"), { recursive: true });
+        await writeFile(join(root, "Books", "x.md"), NOTE_EMPTY, "utf8");
+        await writeFile(join(root, "Books", "hover.md"), NOTE_TITLED, "utf8");
+        await writeFile(join(root, "Books", "seed.md"), NOTE_SEED, "utf8");
+    });
+
+    afterEach(async () => {
+        client?.dispose();
+        await rm(root, { recursive: true, force: true });
+    });
+
+    it("returns schema field completions at a key position", async () => {
+        client = await connectAndInit(root);
+
+        const uri = URI.file(join(root, "Books", "x.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: NOTE_EMPTY },
+        });
+
+        // Cursor on the empty frontmatter line (line 1) -> KEY context.
+        const items = (await client.sendRequest("textDocument/completion", {
+            textDocument: { uri },
+            position: { line: 1, character: 0 },
+        })) as CompletionItem[];
+
+        const labels = items.map((i) => i.label).sort();
+        expect(labels).toEqual(["rating", "status", "title"]);
+
+        const title = items.find((i) => i.label === "title")!;
+        expect(title.kind).toBe(CompletionItemKind.Field);
+        const rating = items.find((i) => i.label === "rating")!;
+        expect(rating.kind).toBe(CompletionItemKind.Field);
+    });
+
+    it("offers corpus-observed values for a key from the value index", async () => {
+        client = await connectAndInit(root);
+
+        // Open the seed note so its `status: reading` enters the value index via the
+        // open-doc overlay (deterministic; avoids racing the async disk reload).
+        const seedUri = URI.file(join(root, "Books", "seed.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: seedUri, languageId: "markdown", version: 1, text: NOTE_SEED },
+        });
+
+        // Open a note where we are typing a `status:` value.
+        const uri = URI.file(join(root, "Books", "x.md")).toString();
+        const typing = "---\nstatus: \n---\n";
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: typing },
+        });
+
+        // Cursor right after `status: ` (line 1, char 8) -> VALUE context.
+        const items = (await client.sendRequest("textDocument/completion", {
+            textDocument: { uri },
+            position: { line: 1, character: 8 },
+        })) as CompletionItem[];
+
+        const statusValue = items.find((i) => i.label === "reading");
+        expect(statusValue).toBeDefined();
+        expect(statusValue!.kind).toBe(CompletionItemKind.Value);
+    });
+
+    it("returns a markdown hover over the title key with type and schema name", async () => {
+        client = await connectAndInit(root);
+
+        const uri = URI.file(join(root, "Books", "hover.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: NOTE_TITLED },
+        });
+
+        // Hover over the `title` key (line 1, char 2).
+        const hover = (await client.sendRequest("textDocument/hover", {
+            textDocument: { uri },
+            position: { line: 1, character: 2 },
+        })) as Hover;
+
+        expect(hover).not.toBeNull();
+        const contents = hover.contents as MarkupContent;
+        expect(contents.kind).toBe("markdown");
+        expect(contents.value).toContain("`title`: string");
+        expect(contents.value).toContain("from schema: **Book**");
+    });
+
+    it("returns [] completions and null hover when off the frontmatter", async () => {
+        client = await connectAndInit(root);
+
+        const uri = URI.file(join(root, "Books", "hover.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: NOTE_TITLED },
+        });
+
+        // line 3 is past the closing fence (body region).
+        const items = (await client.sendRequest("textDocument/completion", {
+            textDocument: { uri },
+            position: { line: 3, character: 0 },
+        })) as CompletionItem[];
+        expect(items).toEqual([]);
+
+        const hover = (await client.sendRequest("textDocument/hover", {
+            textDocument: { uri },
+            position: { line: 3, character: 0 },
+        })) as Hover | null;
+        expect(hover).toBeNull();
     });
 });
 

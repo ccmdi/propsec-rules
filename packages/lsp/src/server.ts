@@ -6,12 +6,26 @@ import {
     type Diagnostic,
     type InitializeParams,
     type InitializeResult,
+    type CompletionItem,
+    type Hover,
 } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
+import type { PropsecConfig } from "@propsec/core";
+import {
+    buildFileMeta,
+    buildValueIndex,
+    computeCompletions,
+    computeHover,
+    parseFrontmatter,
+    type CompletionContext,
+} from "@propsec/engine";
 import { CorpusStore } from "./corpusStore.js";
 import { computeDiagnostics } from "./diagnostics.js";
+import { suggestionToCompletionItem, hoverInfoToHover } from "./completion.js";
 import { loadConfig, CONFIG_FILENAME } from "./config.js";
+
+const EMPTY_CONFIG: PropsecConfig = { schemaMappings: [], customTypes: [] };
 
 const DEBOUNCE_MS = 200;
 
@@ -71,8 +85,41 @@ export function startServer(connection: Connection): void {
         return {
             capabilities: {
                 textDocumentSync: TextDocumentSyncKind.Incremental,
+                completionProvider: { triggerCharacters: [":"], resolveProvider: false },
+                hoverProvider: true,
             },
         };
+    });
+
+    /**
+     * Build a completion/hover context from the LIVE document text (not the store
+     * overlay, whose update is debounced). Returns null if the document is unknown
+     * or the store hasn't initialized.
+     */
+    function contextFor(uri: string, position: CompletionContext["position"]): CompletionContext | null {
+        if (!store) return null;
+        const doc = documents.get(uri);
+        if (!doc) return null;
+        const text = doc.getText();
+        const relPath = store.uriToRelPath(uri);
+        const { meta } = buildFileMeta({ path: relPath, content: text, mtime: 0, ctime: 0 });
+        return { fileMeta: meta, parsed: parseFrontmatter(text), text, position };
+    }
+
+    connection.onCompletion((params): CompletionItem[] => {
+        const ctx = contextFor(params.textDocument.uri, params.position);
+        if (!ctx) return [];
+        const config = store!.config ?? EMPTY_CONFIG;
+        const valueIndex = buildValueIndex(store!.snapshot());
+        return computeCompletions(ctx, config, valueIndex).map(suggestionToCompletionItem);
+    });
+
+    connection.onHover((params): Hover | null => {
+        const ctx = contextFor(params.textDocument.uri, params.position);
+        if (!ctx) return null;
+        const config = store!.config ?? EMPTY_CONFIG;
+        const info = computeHover(ctx, config);
+        return info ? hoverInfoToHover(info) : null;
     });
 
     connection.onInitialized(() => {
