@@ -1,0 +1,11 @@
+// Public API for @propsec/engine
+
+export type { Position, Range } from "./position.js";
+export { parseFrontmatter } from "./frontmatter.js";
+export type { FieldPositions, ParsedFrontmatter } from "./frontmatter.js";
+export { buildFileMeta } from "./fileMeta.js";
+export type { BuildFileMetaInput } from "./fileMeta.js";
+export { loadCorpus } from "./corpus.js";
+export type { CorpusFile } from "./corpus.js";
+export { validateCorpus } from "./validate.js";
+export type { LocatedViolation } from "./validate.js";
