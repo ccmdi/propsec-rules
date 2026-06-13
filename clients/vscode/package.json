@@ -1,0 +1,44 @@
+{
+  "name": "propsec-vscode",
+  "displayName": "Propsec — Markdown Frontmatter",
+  "description": "Live frontmatter validation for Markdown, powered by the propsec language server.",
+  "publisher": "ccmdi",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Propsec",
+      "properties": {
+        "propsec.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to the propsec language server bundle. Leave empty to use the server bundled with this extension (dist/server.js)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs && vitest run"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
