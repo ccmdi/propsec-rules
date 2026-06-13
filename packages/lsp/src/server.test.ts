@@ -9,9 +9,13 @@ import {
     StreamMessageWriter,
     DiagnosticSeverity,
     CompletionItemKind,
+    SymbolKind,
     type CompletionItem,
     type Hover,
     type MarkupContent,
+    type Location,
+    type DocumentSymbol,
+    type SymbolInformation,
 } from "vscode-languageserver/node";
 import {
     createMessageConnection,
@@ -360,6 +364,133 @@ describe("completion + hover wire test (real JSON-RPC requests)", () => {
             position: { line: 3, character: 0 },
         })) as Hover | null;
         expect(hover).toBeNull();
+    });
+});
+
+// --- Navigation wire tests --------------------------------------------------
+
+// Book schema (id "book") with title + rating. Two notes both carry `title`.
+const CONFIG_NAV = JSON.stringify(
+    {
+        schemaMappings: [
+            {
+                id: "book",
+                name: "Book",
+                sourceTemplatePath: null,
+                query: "Books/*",
+                enabled: true,
+                fields: [
+                    { name: "title", type: "string", required: true },
+                    { name: "rating", type: "number", required: false },
+                ],
+            },
+        ],
+        customTypes: [],
+        warnOnUnknownFields: true,
+        allowObsidianProperties: true,
+    },
+    null,
+    2
+);
+
+const NOTE_A = '---\ntitle: "A Note"\nrating: 5\n---\n\nbody\n';
+const NOTE_B = '---\ntitle: "B Note"\n---\n\nbody\n';
+
+describe("navigation wire test (real JSON-RPC requests)", () => {
+    let root: string;
+    let client: MessageConnection;
+    let configUri: string;
+
+    beforeEach(async () => {
+        root = await mkdtemp(join(tmpdir(), "propsec-lsp-nav-"));
+        await writeFile(join(root, "propsec.config.json"), CONFIG_NAV, "utf8");
+        await mkdir(join(root, "Books"), { recursive: true });
+        await writeFile(join(root, "Books", "a.md"), NOTE_A, "utf8");
+        await writeFile(join(root, "Books", "b.md"), NOTE_B, "utf8");
+        configUri = URI.file(join(root, "propsec.config.json")).toString();
+    });
+
+    afterEach(async () => {
+        client?.dispose();
+        await rm(root, { recursive: true, force: true });
+    });
+
+    it("definition on a title key resolves into the config file's field definition", async () => {
+        client = await connectAndInit(root);
+        const uri = URI.file(join(root, "Books", "a.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: NOTE_A },
+        });
+
+        // `title` key on line 1, char 2.
+        const def = (await client.sendRequest("textDocument/definition", {
+            textDocument: { uri },
+            position: { line: 1, character: 2 },
+        })) as Location | Location[] | null;
+
+        expect(def).not.toBeNull();
+        const loc = Array.isArray(def) ? def[0] : def!;
+        expect(loc.uri).toBe(configUri);
+        // The range points inside the config file (the `{ "name": "title" ... }` node).
+        expect(loc.range.start.line).toBeGreaterThan(0);
+        expect(loc.range.end.character).toBeGreaterThan(loc.range.start.character);
+    });
+
+    it("references on title returns Locations for BOTH a.md and b.md", async () => {
+        client = await connectAndInit(root);
+        const aUri = URI.file(join(root, "Books", "a.md")).toString();
+        const bUri = URI.file(join(root, "Books", "b.md")).toString();
+        // Open both so they are in the overlay snapshot (race-free, no disk-load dependency).
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: aUri, languageId: "markdown", version: 1, text: NOTE_A },
+        });
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: bUri, languageId: "markdown", version: 1, text: NOTE_B },
+        });
+
+        const refs = (await client.sendRequest("textDocument/references", {
+            textDocument: { uri: aUri },
+            position: { line: 1, character: 2 },
+            context: { includeDeclaration: true },
+        })) as Location[];
+
+        const uris = refs.map((r) => r.uri).sort();
+        expect(uris).toEqual([aUri, bUri].sort());
+    });
+
+    it("documentSymbol on a.md includes a title symbol", async () => {
+        client = await connectAndInit(root);
+        const uri = URI.file(join(root, "Books", "a.md")).toString();
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri, languageId: "markdown", version: 1, text: NOTE_A },
+        });
+
+        const syms = (await client.sendRequest("textDocument/documentSymbol", {
+            textDocument: { uri },
+        })) as DocumentSymbol[];
+
+        const title = syms.find((s) => s.name === "title");
+        expect(title).toBeDefined();
+        expect(title!.kind).toBe(SymbolKind.Field);
+        expect(syms.map((s) => s.name).sort()).toEqual(["rating", "title"]);
+    });
+
+    it("workspace/symbol query 'a' includes a.md", async () => {
+        client = await connectAndInit(root);
+        const aUri = URI.file(join(root, "Books", "a.md")).toString();
+        // Open a.md so it's present without depending on the async disk reload.
+        await client.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: aUri, languageId: "markdown", version: 1, text: NOTE_A },
+        });
+
+        const syms = (await client.sendRequest("workspace/symbol", {
+            query: "a",
+        })) as SymbolInformation[];
+
+        const a = syms.find((s) => s.name === "a");
+        expect(a).toBeDefined();
+        expect(a!.kind).toBe(SymbolKind.File);
+        expect(a!.location.uri).toBe(aUri);
     });
 });
 

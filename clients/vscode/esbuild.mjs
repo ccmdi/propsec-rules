@@ -13,6 +13,10 @@ const common = {
     sourcemap: true,
     target: "node18",
     logLevel: "warning",
+    // Prefer ESM entry points: jsonc-parser's UMD `main` does a dynamic
+    // require("./impl/format") that esbuild can't statically bundle (crashes at
+    // runtime); its `module` (ESM) entry uses static imports that bundle cleanly.
+    mainFields: ["module", "main"],
 };
 
 // The extension runs inside VS Code's host, which provides `vscode` at runtime —

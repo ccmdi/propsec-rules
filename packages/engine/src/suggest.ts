@@ -166,8 +166,8 @@ function valueCompletions(
     return out;
 }
 
-/** Resolve the top-level key being hovered, if any. */
-function hoveredKey(ctx: CompletionContext): { key: string; range: Range } | null {
+/** Resolve the top-level frontmatter key at the cursor, if any. */
+export function keyAtPosition(ctx: CompletionContext): { key: string; range: Range } | null {
     const pos = ctx.position;
 
     // 1. A positions entry whose keyRange contains the cursor (same line, char in [start,end]).
@@ -224,7 +224,7 @@ function constraintBullets(variants: SchemaField[]): string[] {
 }
 
 export function computeHover(ctx: CompletionContext, config: PropsecConfig): HoverInfo | null {
-    const hk = hoveredKey(ctx);
+    const hk = keyAtPosition(ctx);
     if (!hk) return null;
 
     const schemas = getMatchingSchemas(ctx.fileMeta, config);
