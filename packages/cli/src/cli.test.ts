@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { run } from "./cli.js";
@@ -163,5 +163,38 @@ describe("run usage / unknown commands", () => {
         const { exitCode, stdout } = await run(["frobnicate"], process.cwd());
         expect(exitCode).toBe(2);
         expect(stdout).toMatch(/Unknown command: frobnicate/);
+    });
+
+    it("help mentions both check and init", async () => {
+        const { stdout } = await run(["--help"], process.cwd());
+        expect(stdout).toMatch(/check/);
+        expect(stdout).toMatch(/init/);
+    });
+});
+
+describe("run init dispatch", () => {
+    it("dispatches init and writes a config (exit 0)", async () => {
+        const dir = await makeVault({
+            ".obsidian/plugins/propsec/data.json": JSON.stringify({
+                schemaMappings: BOOK_CONFIG.schemaMappings,
+                customTypes: [],
+                templatesFolder: "Templates",
+            }),
+        });
+
+        const { exitCode, stdout } = await run(["init", dir], process.cwd());
+
+        expect(exitCode).toBe(0);
+        const written = JSON.parse(await readFile(join(dir, "propsec.config.json"), "utf8"));
+        expect(written.schemaMappings).toEqual(BOOK_CONFIG.schemaMappings);
+        expect(written).not.toHaveProperty("templatesFolder");
+        expect(stdout).toMatch(/1 schema, 0 custom types/);
+    });
+
+    it("init exits 2 when no propsec plugin is found", async () => {
+        const dir = await makeVault({ "note.md": "hi\n" });
+        const { exitCode, stdout } = await run(["init", dir], process.cwd());
+        expect(exitCode).toBe(2);
+        expect(stdout).toMatch(/no propsec plugin/i);
     });
 });

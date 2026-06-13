@@ -4,24 +4,40 @@ import { isWarningViolation } from "@propsec/core";
 import { loadCorpus, validateCorpus } from "@propsec/engine";
 import { loadConfig } from "./config.js";
 import { formatViolations, summaryLine } from "./format.js";
+import { runInit } from "./init.js";
 
 export interface RunResult {
     exitCode: number;
     stdout: string;
 }
 
-const USAGE = `Usage: propsec check [dir] [--config <path>] [--strict] [--no-color]
+const USAGE = `Usage: propsec <command> [options]
 
-Validate markdown frontmatter against a propsec JSON schema config.
+Commands:
+  check [dir] [--config <path>] [--strict] [--no-color]
+      Validate markdown frontmatter against a propsec JSON schema config.
 
-Arguments:
+  init [vaultDir] [--from <path>] [--force]
+      Generate <vaultDir>/propsec.config.json from an Obsidian propsec
+      plugin's data.json (auto-detected under .obsidian/plugins, or --from).
+
+check arguments:
   dir              Folder to scan for .md files (default: ".")
 
-Options:
+check options:
   --config <path>  Path to propsec config JSON
                    (default: <dir>/propsec.config.json, then <cwd>/propsec.config.json)
   --strict         Treat warnings as failures (exit 1)
   --no-color       Disable ANSI color output
+
+init arguments:
+  vaultDir         Obsidian vault folder (default: ".")
+
+init options:
+  --from <path>    Path to a specific plugin data.json
+  --force          Overwrite an existing propsec.config.json
+
+Global options:
   -h, --help       Show this help`;
 
 interface ParsedArgs {
@@ -30,6 +46,8 @@ interface ParsedArgs {
     config: string | undefined;
     strict: boolean;
     color: boolean;
+    from: string | undefined;
+    force: boolean;
     help: boolean;
     unknownFlag: string | undefined;
 }
@@ -41,6 +59,8 @@ function parseArgs(argv: string[]): ParsedArgs {
         config: undefined,
         strict: false,
         color: true,
+        from: undefined,
+        force: false,
         help: false,
         unknownFlag: undefined,
     };
@@ -55,10 +75,16 @@ function parseArgs(argv: string[]): ParsedArgs {
             result.strict = true;
         } else if (arg === "--no-color") {
             result.color = false;
+        } else if (arg === "--force") {
+            result.force = true;
         } else if (arg === "--config") {
             result.config = argv[++i];
         } else if (arg.startsWith("--config=")) {
             result.config = arg.slice("--config=".length);
+        } else if (arg === "--from") {
+            result.from = argv[++i];
+        } else if (arg.startsWith("--from=")) {
+            result.from = arg.slice("--from=".length);
         } else if (arg.startsWith("-")) {
             if (result.unknownFlag === undefined) result.unknownFlag = arg;
         } else {
@@ -88,12 +114,16 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
         return { exitCode: 0, stdout: USAGE };
     }
 
-    if (args.command !== "check") {
+    if (args.command !== "check" && args.command !== "init") {
         return { exitCode: 2, stdout: `Unknown command: ${args.command}\n\n${USAGE}` };
     }
 
     if (args.unknownFlag !== undefined) {
         return { exitCode: 2, stdout: `Unknown option: ${args.unknownFlag}\n\n${USAGE}` };
+    }
+
+    if (args.command === "init") {
+        return runInit({ vaultDir: args.dir, from: args.from, force: args.force }, cwd);
     }
 
     const dir = isAbsolute(args.dir) ? args.dir : resolve(cwd, args.dir);
