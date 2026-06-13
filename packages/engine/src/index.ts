@@ -9,3 +9,7 @@ export { loadCorpus } from "./corpus.js";
 export type { CorpusFile } from "./corpus.js";
 export { validateCorpus } from "./validate.js";
 export type { LocatedViolation } from "./validate.js";
+export { buildValueIndex } from "./valueIndex.js";
+export type { ValueIndex } from "./valueIndex.js";
+export { computeCompletions, computeHover } from "./suggest.js";
+export type { CompletionSuggestion, HoverInfo, CompletionContext } from "./suggest.js";

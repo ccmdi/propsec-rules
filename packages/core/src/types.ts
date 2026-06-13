@@ -65,6 +65,8 @@ export interface SchemaField {
     name: string;
     type: FieldType;
     required: boolean;
+    // Human-readable documentation for this field (metadata only; not used by validation)
+    description?: string;
     // Warn if missing (mutually exclusive with required - either warn or required, not both)
     //TODO discrim union
     warn?: boolean;
