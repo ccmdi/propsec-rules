@@ -1,0 +1,25 @@
+{
+  "schemaMappings": [
+    {
+      "id": "book-schema",
+      "name": "Book",
+      "sourceTemplatePath": null,
+      "query": "#book or Books/*",
+      "enabled": true,
+      "fields": [
+        { "name": "title", "type": "string", "required": true },
+        { "name": "author", "type": "string", "required": true },
+        {
+          "name": "rating",
+          "type": "number",
+          "required": false,
+          "numberConstraints": { "max": 5 }
+        },
+        { "name": "isbn", "type": "string", "required": false, "unique": true }
+      ]
+    }
+  ],
+  "customTypes": [],
+  "warnOnUnknownFields": true,
+  "allowObsidianProperties": true
+}
