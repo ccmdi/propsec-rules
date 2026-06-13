@@ -10,4 +10,7 @@ export type * from "./query/fileMeta";
 export * from "./query/matcher";
 export * from "./query/targeting";
 
+export { buildLowerKeyMap, lookupKey, hasKey } from "./utils/object";
+export type { LowerKeyMap } from "./utils/object";
+
 export { groupFieldsByName } from "./utils/schema";

@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { isWarningViolation } from "@propsec/core";
-import { loadCorpus, validateCorpus } from "@propsec/engine";
+import { loadCorpus, validateCorpus, parseQuery, executeQuery } from "@propsec/engine";
 import { loadConfig } from "./config.js";
 import { formatViolations, summaryLine } from "./format.js";
+import { formatQueryTable } from "./queryFormat.js";
 import { runInit } from "./init.js";
 
 export interface RunResult {
@@ -17,9 +18,21 @@ Commands:
   check [dir] [--config <path>] [--strict] [--no-color]
       Validate markdown frontmatter against a propsec JSON schema config.
 
+  query "<query>" [dir] [--config <path>] [--json]
+      Run a schema-typed query over the markdown corpus and print a table.
+
   init [vaultDir] [--from <path>] [--force]
       Generate <vaultDir>/propsec.config.json from an Obsidian propsec
       plugin's data.json (auto-detected under .obsidian/plugins, or --from).
+
+query arguments:
+  query            Query string, e.g.
+                   "Books/* where rating > 4 sort by rating desc limit 10 select title, rating"
+  dir              Folder to scan for .md files (default: ".")
+
+query options:
+  --config <path>  Path to propsec config JSON (same resolution as check)
+  --json           Print rows as JSON instead of a table
 
 check arguments:
   dir              Folder to scan for .md files (default: ".")
@@ -43,9 +56,11 @@ Global options:
 interface ParsedArgs {
     command: string | undefined;
     dir: string;
+    queryString: string | undefined;
     config: string | undefined;
     strict: boolean;
     color: boolean;
+    json: boolean;
     from: string | undefined;
     force: boolean;
     help: boolean;
@@ -56,9 +71,11 @@ function parseArgs(argv: string[]): ParsedArgs {
     const result: ParsedArgs = {
         command: undefined,
         dir: ".",
+        queryString: undefined,
         config: undefined,
         strict: false,
         color: true,
+        json: false,
         from: undefined,
         force: false,
         help: false,
@@ -75,6 +92,8 @@ function parseArgs(argv: string[]): ParsedArgs {
             result.strict = true;
         } else if (arg === "--no-color") {
             result.color = false;
+        } else if (arg === "--json") {
+            result.json = true;
         } else if (arg === "--force") {
             result.force = true;
         } else if (arg === "--config") {
@@ -93,7 +112,14 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
 
     if (positionals.length > 0) result.command = positionals[0];
-    if (positionals.length > 1) result.dir = positionals[1];
+
+    // `query` takes the query string as its first positional, then dir.
+    if (result.command === "query") {
+        if (positionals.length > 1) result.queryString = positionals[1];
+        if (positionals.length > 2) result.dir = positionals[2];
+    } else if (positionals.length > 1) {
+        result.dir = positionals[1];
+    }
 
     return result;
 }
@@ -114,7 +140,7 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
         return { exitCode: 0, stdout: USAGE };
     }
 
-    if (args.command !== "check" && args.command !== "init") {
+    if (args.command !== "check" && args.command !== "init" && args.command !== "query") {
         return { exitCode: 2, stdout: `Unknown command: ${args.command}\n\n${USAGE}` };
     }
 
@@ -127,14 +153,10 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
     }
 
     const dir = isAbsolute(args.dir) ? args.dir : resolve(cwd, args.dir);
+    const configPath = resolveConfigPath(args.config, dir, cwd);
 
-    let configPath: string;
-    if (args.config !== undefined) {
-        configPath = isAbsolute(args.config) ? args.config : resolve(cwd, args.config);
-    } else {
-        const dirConfig = resolve(dir, "propsec.config.json");
-        const cwdConfig = resolve(cwd, "propsec.config.json");
-        configPath = existsSync(dirConfig) ? dirConfig : cwdConfig;
+    if (args.command === "query") {
+        return runQuery({ queryString: args.queryString, dir, configPath, json: args.json });
     }
 
     try {
@@ -154,6 +176,44 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
         const exitCode = hasError || (args.strict && hasWarning) ? 1 : 0;
 
         return { exitCode, stdout };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { exitCode: 2, stdout: message };
+    }
+}
+
+/** Resolve the config path: explicit --config, else <dir>, then <cwd> default. */
+function resolveConfigPath(config: string | undefined, dir: string, cwd: string): string {
+    if (config !== undefined) {
+        return isAbsolute(config) ? config : resolve(cwd, config);
+    }
+    const dirConfig = resolve(dir, "propsec.config.json");
+    const cwdConfig = resolve(cwd, "propsec.config.json");
+    return existsSync(dirConfig) ? dirConfig : cwdConfig;
+}
+
+interface RunQueryArgs {
+    queryString: string | undefined;
+    dir: string;
+    configPath: string;
+    json: boolean;
+}
+
+async function runQuery(args: RunQueryArgs): Promise<RunResult> {
+    if (args.queryString === undefined) {
+        return { exitCode: 2, stdout: `query requires a query string\n\n${USAGE}` };
+    }
+
+    try {
+        const query = parseQuery(args.queryString);
+        const config = loadConfig(args.configPath);
+        const files = await loadCorpus(args.dir);
+        const result = executeQuery(files, config, query);
+
+        if (args.json) {
+            return { exitCode: 0, stdout: JSON.stringify(result.rows, null, 2) };
+        }
+        return { exitCode: 0, stdout: formatQueryTable(result) };
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { exitCode: 2, stdout: message };

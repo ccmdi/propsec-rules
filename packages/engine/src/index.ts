@@ -13,3 +13,5 @@ export { buildValueIndex } from "./valueIndex.js";
 export type { ValueIndex } from "./valueIndex.js";
 export { computeCompletions, computeHover } from "./suggest.js";
 export type { CompletionSuggestion, HoverInfo, CompletionContext } from "./suggest.js";
+export { parseQuery, executeQuery } from "./query.js";
+export type { Query, QueryFilter, QueryRow, QueryResult } from "./query.js";
