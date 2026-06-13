@@ -24,6 +24,16 @@
           "description": "Optional absolute path to the propsec language server bundle. Leave empty to use the server bundled with this extension (dist/server.js)."
         }
       }
+    },
+    "configurationDefaults": {
+      "[markdown]": {
+        "editor.quickSuggestions": {
+          "comments": false,
+          "strings": true,
+          "other": true
+        },
+        "editor.wordBasedSuggestions": "off"
+      }
     }
   },
   "scripts": {
