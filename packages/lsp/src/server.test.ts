@@ -74,7 +74,7 @@ describe("language server wire test (real JSON-RPC over in-memory streams)", () 
 
     afterEach(async () => {
         client?.dispose();
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     });
 
     it("publishes a type_mismatch diagnostic for an opened note", async () => {
@@ -269,7 +269,7 @@ describe("completion + hover wire test (real JSON-RPC requests)", () => {
 
     afterEach(async () => {
         client?.dispose();
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     });
 
     it("returns schema field completions at a key position", async () => {
@@ -412,7 +412,7 @@ describe("navigation wire test (real JSON-RPC requests)", () => {
 
     afterEach(async () => {
         client?.dispose();
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     });
 
     it("definition on a title key resolves into the config file's field definition", async () => {

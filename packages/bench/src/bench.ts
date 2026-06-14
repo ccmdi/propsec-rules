@@ -97,7 +97,8 @@ function sig3(n: number): string {
 
 interface Row {
     size: number;
-    load: number;
+    coldLoad: number;
+    warmLoad: number;
     validate: number;
     diagnostics: number;
     valueIndex: number;
@@ -110,7 +111,8 @@ interface Row {
 
 const COLUMNS: Array<{ key: keyof Row; label: string }> = [
     { key: "size", label: "size" },
-    { key: "load", label: "load" },
+    { key: "coldLoad", label: "coldLoad" },
+    { key: "warmLoad", label: "warmLoad" },
     { key: "validate", label: "validate" },
     { key: "diagnostics", label: "diagnostics" },
     { key: "valueIndex", label: "valueIndex" },
@@ -136,7 +138,7 @@ function printTable(rows: Row[]): void {
     const fmtRow = (cells: string[]) =>
         cells.map((c, i) => c.padStart(widths[i])).join("  ");
 
-    console.log("\n=== RESULTS (median ms; heapMB = heap after load) ===");
+    console.log("\n=== RESULTS (median ms; coldLoad=no cache, warmLoad=cache hit; heapMB=heap after load) ===");
     console.log(fmtRow(header));
     console.log(widths.map((w) => "-".repeat(w)).join("  "));
     for (const b of body) console.log(fmtRow(b));
@@ -149,8 +151,13 @@ async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
     try {
         await generateVault(dir, { count: size });
 
-        // load (K_IO; warm-up also warms OS cache so this is parse+build-dominated)
-        const load = await measureAsync(() => loadCorpus(dir), K_IO);
+        // coldLoad: full read+parse every call (no cache). measureAsync's warm-up
+        // also warms the OS file cache, so this is parse+build-dominated.
+        const coldLoad = await measureAsync(() => loadCorpus(dir, { cache: false }), K_IO);
+
+        // warmLoad: the cache hit. The first call (measureAsync's discarded warm-up)
+        // builds .propsec/cache.json; every timed call reuses it (no read/parse).
+        const warmLoad = await measureAsync(() => loadCorpus(dir), K_IO);
 
         // Stable corpus for the in-memory ops.
         const corpus = await loadCorpus(dir);
@@ -209,7 +216,8 @@ async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
 
         return {
             size,
-            load,
+            coldLoad,
+            warmLoad,
             validate,
             diagnostics,
             valueIndex,
@@ -275,12 +283,14 @@ function printObservations(rows: Row[]): void {
 
     console.log("\n=== THROUGHPUT (largest size) ===");
     console.log(`size = ${largest.size}`);
-    console.log(`load:     ${(largest.size / (largest.load / 1000)).toFixed(0)} files/sec`);
+    console.log(`coldLoad: ${(largest.size / (largest.coldLoad / 1000)).toFixed(0)} files/sec`);
+    console.log(`warmLoad: ${(largest.size / (largest.warmLoad / 1000)).toFixed(0)} files/sec`);
     console.log(`validate: ${(largest.size / (largest.validate / 1000)).toFixed(0)} files/sec`);
 
     console.log("\n=== OBSERVATIONS ===");
     const metricKeys: Array<keyof Row> = [
-        "load",
+        "coldLoad",
+        "warmLoad",
         "validate",
         "diagnostics",
         "valueIndex",
@@ -291,6 +301,19 @@ function printObservations(rows: Row[]): void {
     ];
     for (const k of metricKeys) {
         console.log(`- ${k.padEnd(15)} ${scalingNote(rows, k)}`);
+    }
+
+    console.log("\n=== STARTUP CACHE (COLD vs WARM loadCorpus) ===");
+    console.log(
+        "  cold = full read+parse every call ({cache:false}); warm = .propsec/cache.json hit (no read/parse)."
+    );
+    for (const r of [...rows].sort((a, b) => a.size - b.size)) {
+        const speedup = r.warmLoad > 0 ? r.coldLoad / r.warmLoad : Infinity;
+        console.log(
+            `- @${String(r.size).padEnd(6)} cold ${sig3(r.coldLoad)}ms -> warm ${sig3(
+                r.warmLoad
+            )}ms  (${speedup.toFixed(1)}x faster)`
+        );
     }
 
     console.log("\n=== INTERACTIVITY (PER-KEYSTROKE LSP COSTS) ===");
