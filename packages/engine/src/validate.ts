@@ -2,11 +2,13 @@ import {
     validateFrontmatter,
     validationContext,
     getMatchingSchemas,
+    findDuplicateViolations,
     OBSIDIAN_NATIVE_PROPERTIES,
     MALFORMED_SCHEMA,
     type PropsecConfig,
     type SchemaMapping,
     type SchemaField,
+    type UniqueEntry,
     type Violation,
 } from "@propsec/core";
 import type { Range } from "./position.js";
@@ -17,19 +19,6 @@ export interface LocatedViolation extends Violation {
 }
 
 const ZERO_RANGE: Range = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
-
-/**
- * Normalize a value for unique comparison.
- * Ported verbatim from propsec validator.ts (normalizeValueForUnique).
- */
-function normalizeValueForUnique(value: unknown): string {
-    if (typeof value === "string") return value;
-    if (typeof value === "number" || typeof value === "boolean") return String(value);
-    if (value instanceof Date) return value.toISOString();
-    if (Array.isArray(value)) return JSON.stringify(value.sort());
-    if (typeof value === "object" && value !== null) return JSON.stringify(value) ?? "";
-    return String(value);
-}
 
 function lookupKeyCI(obj: Record<string, unknown>, key: string): string | undefined {
     const lower = key.toLowerCase();
@@ -69,9 +58,8 @@ function rangeForViolation(violation: Violation, file: CorpusFile): Range {
 }
 
 /**
- * Cross-file `unique` check. Ports propsec's incremental O(N) algorithm:
- * detect duplicate normalized values across all files matching a schema and
- * emit duplicate_value violations on ALL files sharing a value.
+ * Cross-file `unique` check. Builds UniqueEntry[] from the matched corpus files
+ * and delegates duplicate detection to core's findDuplicateViolations.
  */
 function checkUniqueForSchema(
     schema: SchemaMapping,
@@ -79,43 +67,25 @@ function checkUniqueForSchema(
     matchedFiles: CorpusFile[],
     sink: (file: CorpusFile, v: Violation) => void
 ): void {
-    // For each unique field, group files by normalized value (encounter order),
-    // then emit one violation per file in any group of size >= 2 with the
-    // complete "also in" list — matching propsec's final store state.
-    for (const field of uniqueFields) {
-        const groups = new Map<string, { value: string; files: CorpusFile[] }>();
+    const byPath = new Map(matchedFiles.map((f) => [f.meta.path, f]));
 
+    for (const field of uniqueFields) {
+        const entries: UniqueEntry[] = [];
         for (const file of matchedFiles) {
             const fm = file.meta.frontmatter;
             if (!fm) continue;
-
             const actualKey = lookupKeyCI(fm, field.name);
             if (!actualKey) continue;
-
-            const value = fm[actualKey];
-            if (value === null || value === undefined) continue;
-
-            const valueStr = normalizeValueForUnique(value);
-            const group = groups.get(valueStr);
-            if (group) group.files.push(file);
-            else groups.set(valueStr, { value: valueStr, files: [file] });
+            entries.push({
+                filePath: file.meta.path,
+                basename: file.meta.basename,
+                value: fm[actualKey],
+            });
         }
 
-        for (const { value, files } of groups.values()) {
-            if (files.length < 2) continue;
-            for (const dupFile of files) {
-                const others = files
-                    .filter((f) => f.meta.path !== dupFile.meta.path)
-                    .map((f) => f.meta.basename);
-                sink(dupFile, {
-                    filePath: dupFile.meta.path,
-                    schemaMapping: schema,
-                    field: field.name,
-                    type: "duplicate_value",
-                    message: `Duplicate value: "${value}" also in: ${others.join(", ")}`,
-                    actual: value,
-                });
-            }
+        for (const v of findDuplicateViolations(schema, field.name, entries)) {
+            const file = byPath.get(v.filePath);
+            if (file) sink(file, v);
         }
     }
 }
