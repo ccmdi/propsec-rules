@@ -618,6 +618,51 @@ describe("validateFrontmatter", () => {
                 .toHaveLength(1);
         });
 
+        it("validates string allowedValues", () => {
+            const schema = createSchema([
+                field("status", "string", {
+                    required: true,
+                    stringConstraints: { allowedValues: ["active", "dormant", "retired"] },
+                }),
+            ]);
+
+            expect(validateFrontmatter({ status: "active" }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(0);
+
+            const violations = validateFrontmatter({ status: "paused" }, schema, "test.md", { checkUnknownFields: false });
+            expect(violations).toHaveLength(1);
+            expect(violations[0].type).toBe("string_disallowed_value");
+            expect(violations[0].message).toContain('"paused"');
+        });
+
+        it("treats empty string allowedValues as unconstrained", () => {
+            const schema = createSchema([
+                field("status", "string", {
+                    required: true,
+                    stringConstraints: { allowedValues: [] },
+                }),
+            ]);
+
+            expect(validateFrontmatter({ status: "anything" }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(0);
+        });
+
+        it("composes string allowedValues with pattern", () => {
+            const schema = createSchema([
+                field("status", "string", {
+                    required: true,
+                    stringConstraints: { allowedValues: ["active", "dormant"], pattern: "^[a-z]+$" },
+                }),
+            ]);
+
+            expect(validateFrontmatter({ status: "active" }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(0);
+
+            // Fails both constraints independently
+            const violations = validateFrontmatter({ status: "Paused1" }, schema, "test.md", { checkUnknownFields: false });
+            expect(violations).toHaveLength(2);
+        });
+
         it("validates date min constraint", () => {
             const schema = createSchema([
                 field("published", "date", {

@@ -25,6 +25,7 @@ export const CONSTRAINT_GROUPS: ConstraintGroupMeta[] = [
             { key: "pattern", label: "Pattern (regex):", input: "text", placeholder: "e.g., ^[A-Z].*" },
             { key: "minLength", label: "Min length:", input: "integer" },
             { key: "maxLength", label: "Max length:", input: "integer" },
+            { key: "allowedValues", label: "Allowed values:", input: "string-list", placeholder: "value1, value2" },
         ],
     },
     {

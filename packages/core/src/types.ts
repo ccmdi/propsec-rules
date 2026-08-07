@@ -37,6 +37,7 @@ export interface StringConstraints {
     pattern?: string;      // Regex pattern
     minLength?: number;
     maxLength?: number;
+    allowedValues?: string[];  // Value must be one of these
 }
 
 export interface NumberConstraints {
@@ -203,7 +204,8 @@ export type ViolationType =
     | "cross_field_violation"
     | "malformed_frontmatter"
     | "array_duplicate_item"
-    | "array_disallowed_value";
+    | "array_disallowed_value"
+    | "string_disallowed_value";
 
 export interface Violation {
     filePath: string;

@@ -380,12 +380,20 @@ function findMatchingVariant(value: unknown, variants: SchemaField[]): SchemaFie
 
 function checkStringConstraints(
     value: string,
-    constraints: { pattern?: string; minLength?: number; maxLength?: number },
+    constraints: { pattern?: string; minLength?: number; maxLength?: number; allowedValues?: string[] },
     path: string,
     filePath: string,
     schema: SchemaMapping
 ): Violation[] {
     const violations: Violation[] = [];
+
+    if (constraints.allowedValues && constraints.allowedValues.length > 0 && !constraints.allowedValues.includes(value)) {
+        violations.push(createViolation(
+            filePath, schema, path, "string_disallowed_value",
+            `Disallowed value: ${path} is "${value}" (allowed: ${constraints.allowedValues.join(", ")})`,
+            constraints.allowedValues.join(", "), value
+        ));
+    }
 
     if (constraints.pattern) {
         try {
