@@ -577,6 +577,36 @@ function checkArrayConstraints(
         }
     }
 
+    if (constraints.allowedValues && constraints.allowedValues.length > 0) {
+        const allowed = constraints.allowedValues;
+        for (let i = 0; i < value.length; i++) {
+            const item = String(value[i]);
+            if (!allowed.includes(item)) {
+                violations.push(createViolation(
+                    filePath, schema, path, "array_disallowed_value",
+                    `Disallowed value: ${path}[${i}] is "${item}" (allowed: ${allowed.join(", ")})`,
+                    allowed.join(", "), item
+                ));
+            }
+        }
+    }
+
+    if (constraints.uniqueItems) {
+        const seen = new Set<string>();
+        for (const item of value) {
+            const key = JSON.stringify(item);
+            if (seen.has(key)) {
+                violations.push(createViolation(
+                    filePath, schema, path, "array_duplicate_item",
+                    `Duplicate array item: ${path} contains duplicate value "${item}"`,
+                    "unique items", String(item)
+                ));
+                break;  // One violation per array is enough
+            }
+            seen.add(key);
+        }
+    }
+
     return violations;
 }
 
