@@ -20,7 +20,7 @@ export type ComparisonOperator =
 /**
  * Extended operators that include contains/not_contains and existence checks (used for property conditions)
  */
-export type PropertyOperator = ComparisonOperator | "contains" | "not_contains" | "exists" | "not_exists";
+export type PropertyOperator = ComparisonOperator | "contains" | "not_contains" | "in" | "not_in" | "exists" | "not_exists";
 
 // ============ Operator Lists ============
 
@@ -43,6 +43,8 @@ export const PROPERTY_OPERATORS: PropertyOperator[] = [
     ...COMPARISON_OPERATORS,
     "contains",
     "not_contains",
+    "in",
+    "not_in",
     "exists",
     "not_exists",
 ];
@@ -67,6 +69,8 @@ export const OPERATOR_INFO: Record<PropertyOperator, OperatorInfo> = {
     less_or_equal: { value: "less_or_equal", label: "<=", symbol: "<=" },
     contains: { value: "contains", label: "contains", symbol: "contains" },
     not_contains: { value: "not_contains", label: "not contains", symbol: "!contains" },
+    in: { value: "in", label: "in", symbol: "in" },
+    not_in: { value: "not_in", label: "not in", symbol: "!in" },
     exists: { value: "exists", label: "exists", symbol: "exists" },
     not_exists: { value: "not_exists", label: "not exists", symbol: "!exists" },
 };
@@ -121,7 +125,7 @@ export function getPropertyOperatorOptions(): OperatorInfo[] {
 export function getOperatorsForPropertyType(propertyType: string): PropertyOperator[] {
     switch (propertyType) {
         case "number":
-            return ["equals", "not_equals", "greater_than", "less_than", "greater_or_equal", "less_or_equal", "exists", "not_exists"];
+            return ["equals", "not_equals", "greater_than", "less_than", "greater_or_equal", "less_or_equal", "in", "not_in", "exists", "not_exists"];
         case "checkbox":
             return ["equals", "not_equals", "exists", "not_exists"];
         case "date":
@@ -130,10 +134,10 @@ export function getOperatorsForPropertyType(propertyType: string): PropertyOpera
         case "tags":
         case "aliases":
         case "multitext":
-            return ["contains", "not_contains", "equals", "not_equals", "exists", "not_exists"];
+            return ["contains", "not_contains", "in", "not_in", "equals", "not_equals", "exists", "not_exists"];
         case "text":
         default:
-            return ["equals", "not_equals", "contains", "not_contains", "exists", "not_exists"];
+            return ["equals", "not_equals", "contains", "not_contains", "in", "not_in", "exists", "not_exists"];
     }
 }
 
@@ -201,6 +205,14 @@ export function evaluatePropertyOperator(
             return !propValue.some(v => String(v) === compareValue);
         }
         return !String(propValue).includes(compareValue);
+    }
+
+    if (operator === "in" || operator === "not_in") {
+        const allowed = compareValue.split(",").map(v => v.trim()).filter(v => v !== "");
+        const isIn = Array.isArray(propValue)
+            ? propValue.some(v => allowed.includes(String(v)))
+            : allowed.includes(String(propValue));
+        return operator === "in" ? isIn : !isIn;
     }
 
     // Handle equals/not_equals as string comparison

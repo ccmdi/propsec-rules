@@ -32,7 +32,7 @@ describe("operators", () => {
 
     describe("PROPERTY_OPERATORS", () => {
         it("contains all comparison operators plus contains/not_contains", () => {
-            expect(PROPERTY_OPERATORS).toHaveLength(10);
+            expect(PROPERTY_OPERATORS).toHaveLength(12);
             expect(PROPERTY_OPERATORS).toContain("contains");
             expect(PROPERTY_OPERATORS).toContain("not_contains");
             COMPARISON_OPERATORS.forEach(op => {
@@ -139,7 +139,7 @@ describe("operators", () => {
     describe("getPropertyOperatorOptions", () => {
         it("returns options for all property operators", () => {
             const options = getPropertyOperatorOptions();
-            expect(options).toHaveLength(10);
+            expect(options).toHaveLength(12);
         });
     });
 
@@ -247,6 +247,30 @@ describe("operators", () => {
 
             it("converts array elements to strings for comparison", () => {
                 expect(evaluatePropertyOperator([1, 2, 3], "contains", "2")).toBe(true);
+            });
+        });
+
+        describe("in/not_in", () => {
+            it("checks membership in a comma-separated list", () => {
+                expect(evaluatePropertyOperator("conversation", "in", "conversation, source")).toBe(true);
+                expect(evaluatePropertyOperator("note", "in", "conversation, source")).toBe(false);
+                expect(evaluatePropertyOperator("note", "not_in", "conversation, source")).toBe(true);
+            });
+
+            it("compares by string form", () => {
+                expect(evaluatePropertyOperator(3, "in", "1, 2, 3")).toBe(true);
+                expect(evaluatePropertyOperator(4, "in", "1, 2, 3")).toBe(false);
+            });
+
+            it("matches any element for arrays", () => {
+                expect(evaluatePropertyOperator(["a", "x"], "in", "x, y")).toBe(true);
+                expect(evaluatePropertyOperator(["a", "b"], "in", "x, y")).toBe(false);
+                expect(evaluatePropertyOperator(["a", "b"], "not_in", "x, y")).toBe(true);
+            });
+
+            it("treats an empty list as no match", () => {
+                expect(evaluatePropertyOperator("anything", "in", "")).toBe(false);
+                expect(evaluatePropertyOperator("anything", "not_in", "")).toBe(true);
             });
         });
 
