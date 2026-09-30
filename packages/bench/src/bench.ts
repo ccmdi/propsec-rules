@@ -171,7 +171,7 @@ async function benchSize(size: number, program: Program): Promise<Row> {
         const diagnostics = measure(() => void computeDiagnostics(corpus, program), K_MEM);
         const valueIndex = measure(() => void buildValueIndex(corpus), K_MEM);
 
-        const parsedQuery = parseQuery("Books where rating >= 3 sort by rating desc");
+        const parsedQuery = parseQuery('file.folder == "Books" && rating >= 3 sort by rating desc');
         const query = measure(() => void executeQuery(corpus, program, parsedQuery), K_MEM);
 
         // perEdit: rebuild ONE file's CorpusFile from its text and revalidate a snapshot.

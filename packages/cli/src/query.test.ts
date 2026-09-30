@@ -57,7 +57,7 @@ describe("run query --json", () => {
         const dir = await makeVault(VAULT_FILES);
 
         const { exitCode, stdout } = await run(
-            ["query", "Books/* where rating > 4 sort by rating desc", dir, "--json"],
+            ["query", 'file.inFolder("Books") && rating > 4 sort by rating desc', dir, "--json"],
             process.cwd()
         );
 
@@ -72,7 +72,7 @@ describe("run query --json", () => {
         const dir = await makeVault(VAULT_FILES);
 
         const { exitCode, stdout } = await run(
-            ["query", "Books/* sort by title select title, rating", dir, "--json"],
+            ["query", 'file.inFolder("Books") sort by title select title, rating', dir, "--json"],
             process.cwd()
         );
 
@@ -90,7 +90,7 @@ describe("run query (table)", () => {
         const dir = await makeVault(VAULT_FILES);
 
         const { exitCode, stdout } = await run(
-            ["query", "Books/* where rating >= 4 sort by rating desc select title, rating", dir],
+            ["query", 'file.inFolder("Books") && rating >= 4 sort by rating desc select title, rating', dir],
             process.cwd()
         );
 
@@ -107,12 +107,12 @@ describe("run query (table)", () => {
         const dir = await makeVault(VAULT_FILES);
 
         const { exitCode, stdout } = await run(
-            ["query", "Books/* where bogus = 1", dir],
+            ["query", 'file.inFolder("Books") && bogus == 1', dir],
             process.cwd()
         );
 
         expect(exitCode).toBe(0);
-        expect(stdout).toContain('warning: field "bogus" is not defined in any schema in scope');
+        expect(stdout).toContain('warning: field "bogus" is not defined in any schema');
     });
 });
 
@@ -120,10 +120,10 @@ describe("run query errors", () => {
     it("exits 2 with the parse error message for a malformed query", async () => {
         const dir = await makeVault(VAULT_FILES);
 
-        const { exitCode, stdout } = await run(["query", "where rating", dir], process.cwd());
+        const { exitCode, stdout } = await run(["query", "rating >", dir], process.cwd());
 
         expect(exitCode).toBe(2);
-        expect(stdout).toMatch(/operator/i);
+        expect(stdout).toMatch(/unexpected end/i);
     });
 
     it("exits 2 when the query string is missing", async () => {
@@ -140,13 +140,13 @@ describe("run query errors", () => {
             "Books/Dune.md": `---\ntitle: Dune\nauthor: x\nrating: 5\n---\nok\n`,
         });
 
-        const { exitCode, stdout } = await run(["query", "Books/*", dir], process.cwd());
+        const { exitCode, stdout } = await run(["query", 'file.inFolder("Books")', dir], process.cwd());
 
         expect(exitCode).toBe(2);
         expect(stdout).toMatch(/not found/i);
     });
 
-    it("resolves --config and applies targeting via #tag", async () => {
+    it("resolves --config and filters by tag", async () => {
         const dir = await makeVault({
             "myconf.json": JSON.stringify(BOOK_CONFIG),
             "Reading/F451.md": `---\ntitle: F451\nauthor: Bradbury\nrating: 3\ntags:\n  - book\n---\nbook by tag\n`,
@@ -154,7 +154,7 @@ describe("run query errors", () => {
         });
 
         const { exitCode, stdout } = await run(
-            ["query", "#book select title", dir, "--json", "--config", join(dir, "myconf.json")],
+            ["query", 'file.hasTag("book") select title', dir, "--json", "--config", join(dir, "myconf.json")],
             process.cwd()
         );
 

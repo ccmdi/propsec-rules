@@ -16,7 +16,7 @@ JSON Schema already handles per-file frontmatter checking. What it can't do is t
 - Completion: the fields a note's schema expects (which schema depends on the note's tags and folder), plus values other notes already use for that field.
 - Hover: a field's type, flags, constraints, and which schema it came from.
 - Navigation: jump from a frontmatter key to its definition in the schema, and find every note that uses a field.
-- Query: `propsec query "Books/* where rating > 4 sort by rating desc"`, run over the whole vault, with numeric and date comparisons.
+- Query: `propsec query 'file.inFolder("Books") && rating > 4 sort by rating desc'`, run over the whole vault, using the same rules as the schemas.
 
 ## Setup
 
@@ -44,7 +44,7 @@ Runs from source for now:
 
 ```
 npx tsx packages/cli/src/bin.ts check ./vault
-npx tsx packages/cli/src/bin.ts query "where status = reading" ./vault --json
+npx tsx packages/cli/src/bin.ts query 'status == "reading"' ./vault --json
 npx tsx packages/cli/src/bin.ts init ./vault
 ```
 
@@ -56,26 +56,37 @@ A `propsec.config.json` at the root of the folder you open:
 
 ```json
 {
-  "schemaMappings": [
+  "schemas": [
     {
       "id": "book",
       "name": "Book",
-      "query": "Books/* or #book",
       "enabled": true,
+      "where": "file.inFolder(\"Books\") || file.hasTag(\"book\")",
       "fields": [
-        { "name": "title", "type": "string", "required": true },
-        { "name": "rating", "type": "number", "numberConstraints": { "max": 5 } },
-        { "name": "isbn", "type": "string", "unique": true }
+        { "name": "title", "type": "string", "required": true, "must": "size(it) >= 1" },
+        { "name": "rating", "type": "number", "required": false, "must": "it >= 1 && it <= 5" },
+        { "name": "isbn", "type": "string", "required": false, "unique": true, "when": "format == \"print\"" }
       ]
     }
   ],
-  "customTypes": []
+  "types": [],
+  "exclude": "file.hasTag(\"archived\")",
+  "openFields": ["aliases", "tags", "cssclasses"]
 }
 ```
 
-The `query` decides which notes a schema applies to: `folder`, `folder/*`, `#tag`, or `*`, combined with `and`, `or`, and `not`.
+Everything that decides or checks something is a rule, written in one small expression language:
 
-Field types are `string`, `number`, `boolean`, `date`, `array`, `object`, `null`, `unknown`, or a custom type. A field can be `required`, `warn` (a soft requirement), or `unique`. Repeat a field name with different types to make a union, so two `status` entries typed `string` and `null` give `string | null`. Custom types are named groups of fields, and they nest. Constraints cover patterns, min and max, length, item counts, and dates.
+- `where` picks the notes a schema applies to.
+- `when` makes a field apply only to some notes.
+- `must` checks a field's value, which the rule calls `it`. Each part joined by `&&` is reported on its own.
+- `exclude` removes notes from every schema.
+
+A rule reads frontmatter by name (`rating`, or `note["date created"]` for names with spaces) and the file through `file`: `file.path`, `file.name`, `file.folder`, `file.tags`, `file.mtime`, `file.ctime`, `file.inFolder("Books")`, `file.hasTag("book")`. It has `&&`, `||`, `!`, comparisons, `in`, arithmetic, `has(x)`, `size(x)`, `date(x)`, and methods like `matches`, `contains`, `startsWith`, `exists(x, ...)` and `all(x, ...)`. The syntax follows CEL, with a few deliberate differences for frontmatter: a missing property is `null` rather than an error, all numbers are one type, `"4"` and `4` compare as numbers, values of different kinds never order against each other, and `!` is only true for `false`.
+
+Field types are `string`, `number`, `boolean`, `date`, `array`, `object`, `null`, `unknown`, or a custom type. A field can be `required`, `warn` (a soft requirement), or `unique`. Repeat a field name with different types to make a union, so two `status` entries typed `string` and `null` give `string | null`. Custom types are named groups of fields, and they nest.
+
+The older config format (`schemaMappings`) still loads and is converted on read.
 
 Tag matching currently reads the frontmatter `tags:` field only. Inline `#tags` in the body come later.
 

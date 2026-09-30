@@ -26,8 +26,8 @@ Commands:
       plugin's data.json (auto-detected under .obsidian/plugins, or --from).
 
 query arguments:
-  query            Query string, e.g.
-                   "Books/* where rating > 4 sort by rating desc limit 10 select title, rating"
+  query            A rule, then optional clauses, e.g.
+                   'file.inFolder("Books") && rating > 4 sort by rating desc limit 10 select title, rating'
   dir              Folder to scan for .md files (default: ".")
 
 query options:

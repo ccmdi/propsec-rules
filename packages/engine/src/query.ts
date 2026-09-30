@@ -1,23 +1,8 @@
-import {
-    type PropertyOperator,
-    type Program,
-    type Schema,
-    compileExpr,
-    keyOf,
-    lowerCondition,
-    lowerTargeting,
-} from "@propsec/core";
+import { type Program, compileExpr, keyOf } from "@propsec/core";
 import type { CorpusFile } from "./corpus.js";
 
-export interface QueryFilter {
-    field: string;
-    operator: PropertyOperator;
-    value: string;
-}
-
 export interface Query {
-    targeting?: string;
-    filters: QueryFilter[];
+    filter?: string;
     sortBy?: { field: string; dir: "asc" | "desc" };
     limit?: number;
     select?: string[];
@@ -34,18 +19,7 @@ export interface QueryResult {
     columns: string[];
 }
 
-// Query operator token -> PropertyOperator. Longest tokens matched first.
-const OPERATOR_TOKENS: Array<[string, PropertyOperator]> = [
-    [">=", "greater_or_equal"],
-    ["<=", "less_or_equal"],
-    ["==", "equals"],
-    ["!=", "not_equals"],
-    ["=", "equals"],
-    [">", "greater_than"],
-    ["<", "less_than"],
-];
-
-const KEYWORDS = ["where", "sort by", "limit", "select"] as const;
+const KEYWORDS = ["sort by", "limit", "select"] as const;
 
 interface KeywordHit {
     keyword: (typeof KEYWORDS)[number];
@@ -54,38 +28,36 @@ interface KeywordHit {
 }
 
 /**
- * Replace every double-quoted span with same-length filler so keyword matching
- * never fires inside a quoted value. Indices stay aligned with the original.
+ * Replace every quoted span with same-length filler so keyword matching
+ * never fires inside a string. Indices stay aligned with the original.
  */
 function maskQuotes(input: string): string {
     let out = "";
-    let inQuote = false;
+    let quote: string | null = null;
     for (const ch of input) {
-        if (ch === '"') {
-            inQuote = !inQuote;
-            out += '"';
-        } else if (inQuote) {
-            out += "\0";
-        } else {
+        if (quote === null && (ch === '"' || ch === "'")) {
+            quote = ch;
             out += ch;
+        } else if (ch === quote) {
+            quote = null;
+            out += ch;
+        } else {
+            out += quote === null ? ch : "\0";
         }
     }
     return out;
 }
 
 /**
- * Find the first occurrence of any top-level keyword (case-insensitive),
- * matched only on word boundaries so a field/value containing "where" etc. is
- * safe. `masked` is the quote-masked view; indices map back to the original.
+ * Find the first occurrence of any clause keyword (case-insensitive),
+ * matched only on word boundaries. `masked` is the quote-masked view.
  */
 function findFirstKeyword(masked: string, from: number): KeywordHit | undefined {
     let best: KeywordHit | undefined;
     for (const keyword of KEYWORDS) {
         const re = new RegExp(`(^|\\s)${keyword.replace(/ /g, "\\s+")}(\\s|$)`, "i");
-        const slice = masked.slice(from);
-        const m = re.exec(slice);
+        const m = re.exec(masked.slice(from));
         if (!m) continue;
-        // index of the keyword itself (skip a leading whitespace captured by group 1)
         const idx = from + m.index + (m[1] ? m[1].length : 0);
         const len = m[0].length - (m[1] ? m[1].length : 0) - (m[2] ? m[2].length : 0);
         if (best === undefined || idx < best.index) {
@@ -95,7 +67,7 @@ function findFirstKeyword(masked: string, from: number): KeywordHit | undefined 
     return best;
 }
 
-/** Strip surrounding double quotes from a value token; barewords pass through. */
+/** Strip surrounding double quotes from a field token; barewords pass through. */
 function unquote(token: string): string {
     const t = token.trim();
     if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
@@ -105,104 +77,15 @@ function unquote(token: string): string {
 }
 
 /**
- * Split a clause into top-level `and`-separated conditions (case-insensitive),
- * ignoring `and` that appears inside a double-quoted value.
- */
-function splitConditions(clause: string): string[] {
-    const parts: string[] = [];
-    let buf = "";
-    let inQuote = false;
-    let i = 0;
-    while (i < clause.length) {
-        const ch = clause[i];
-        if (ch === '"') {
-            inQuote = !inQuote;
-            buf += ch;
-            i++;
-            continue;
-        }
-        if (!inQuote) {
-            const rest = clause.slice(i);
-            const m = /^(\s+and\s+)/i.exec(rest);
-            if (m) {
-                parts.push(buf);
-                buf = "";
-                i += m[0].length;
-                continue;
-            }
-        }
-        buf += ch;
-        i++;
-    }
-    if (buf.trim()) parts.push(buf);
-    return parts.map((p) => p.trim()).filter(Boolean);
-}
-
-function parseCondition(raw: string): QueryFilter {
-    const cond = raw.trim();
-    if (!cond) throw new Error("Empty condition in where clause");
-
-    // Word operators: `<field> exists`, `<field> missing`, `<field> not exists`,
-    // `<field> contains <value>`, `<field> not contains <value>`, `<field> !contains <value>`.
-    // Try these before symbol operators so "contains"/"exists" aren't mis-split.
-    const nullaryMatch = /^(.+?)\s+(exists|missing|!exists|not\s+exists)$/i.exec(cond);
-    if (nullaryMatch) {
-        const field = nullaryMatch[1].trim();
-        const tok = nullaryMatch[2].toLowerCase().replace(/\s+/g, " ");
-        const op: PropertyOperator = tok === "exists" ? "exists" : "not_exists";
-        if (!field) throw new Error(`Condition is missing a field: "${cond}"`);
-        return { field, operator: op, value: "" };
-    }
-
-    const notContainsMatch = /^(.+?)\s+(?:!contains|not\s+contains)\s+(.+)$/i.exec(cond);
-    if (notContainsMatch) {
-        const field = notContainsMatch[1].trim();
-        if (!field) throw new Error(`Condition is missing a field: "${cond}"`);
-        return { field, operator: "not_contains", value: unquote(notContainsMatch[2]) };
-    }
-
-    const containsMatch = /^(.+?)\s+contains\s+(.+)$/i.exec(cond);
-    if (containsMatch) {
-        const field = containsMatch[1].trim();
-        if (!field) throw new Error(`Condition is missing a field: "${cond}"`);
-        return { field, operator: "contains", value: unquote(containsMatch[2]) };
-    }
-
-    // Symbol operators: scan for the first top-level symbol (outside quotes).
-    let inQuote = false;
-    for (let i = 0; i < cond.length; i++) {
-        const ch = cond[i];
-        if (ch === '"') {
-            inQuote = !inQuote;
-            continue;
-        }
-        if (inQuote) continue;
-        for (const [tok, op] of OPERATOR_TOKENS) {
-            if (cond.startsWith(tok, i)) {
-                const field = cond.slice(0, i).trim();
-                const value = cond.slice(i + tok.length).trim();
-                if (!field) throw new Error(`Condition is missing a field: "${cond}"`);
-                if (!value) throw new Error(`Condition is missing a value: "${cond}"`);
-                return { field, operator: op, value: unquote(value) };
-            }
-        }
-    }
-
-    throw new Error(`Condition is missing an operator: "${cond}"`);
-}
-
-/**
  * Parse a query string into a structured Query.
  * Grammar (keywords case-insensitive):
- *   [<targeting>] [where <cond> [and <cond>]*] [sort by <field> [asc|desc]] [limit <n>] [select <field>[, <field>]*]
+ *   [<rule>] [sort by <field> [asc|desc]] [limit <n>] [select <field>[, <field>]*]
+ * The rule is an expression, e.g. `file.inFolder("Books") && rating > 4`.
  */
 export function parseQuery(input: string): Query {
     const text = input ?? "";
     const masked = maskQuotes(text);
 
-    // Locate each top-level keyword in order; everything before the first is targeting.
-    // Keyword detection runs over the quote-masked view so a keyword inside a
-    // quoted value isn't treated as a clause boundary.
     const hits: KeywordHit[] = [];
     let cursor = 0;
     while (cursor <= text.length) {
@@ -212,13 +95,15 @@ export function parseQuery(input: string): Query {
         cursor = hit.index + hit.length;
     }
 
-    const query: Query = { filters: [] };
+    const query: Query = {};
 
     const firstIndex = hits.length > 0 ? hits[0].index : text.length;
-    const targeting = text.slice(0, firstIndex).trim();
-    if (targeting) query.targeting = targeting;
+    const filter = text.slice(0, firstIndex).trim();
+    if (filter) {
+        compileExpr(filter);
+        query.filter = filter;
+    }
 
-    // Slice the segment that belongs to each keyword (its text up to the next keyword).
     for (let h = 0; h < hits.length; h++) {
         const hit = hits[h];
         const segStart = hit.index + hit.length;
@@ -226,13 +111,6 @@ export function parseQuery(input: string): Query {
         const segment = text.slice(segStart, segEnd).trim();
 
         switch (hit.keyword) {
-            case "where": {
-                if (!segment) throw new Error("`where` requires at least one condition");
-                const conds = splitConditions(segment);
-                if (conds.length === 0) throw new Error("`where` requires at least one condition");
-                for (const c of conds) query.filters.push(parseCondition(c));
-                break;
-            }
             case "sort by": {
                 if (!segment) throw new Error("`sort by` requires a field");
                 const m = /^(.+?)(?:\s+(asc|desc))?$/i.exec(segment);
@@ -270,15 +148,6 @@ function getValue(frontmatter: Record<string, unknown> | undefined, field: strin
     return key === undefined ? undefined : frontmatter![key];
 }
 
-/** Distinct schema-defined field names across the given schemas. */
-function schemaFieldSet(schemas: Schema[]): Set<string> {
-    const set = new Set<string>();
-    for (const s of schemas) {
-        for (const f of s.fields) set.add(f.name.toLowerCase());
-    }
-    return set;
-}
-
 function isNumericLike(v: unknown): v is number {
     return typeof v === "number" && !Number.isNaN(v);
 }
@@ -313,34 +182,31 @@ function compareValues(a: unknown, b: unknown): number {
     return sa < sb ? -1 : sa > sb ? 1 : 0;
 }
 
+function distinctCaseless(fields: string[]): string[] {
+    const seen = new Set<string>();
+    return fields.filter((f) => {
+        const k = f.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+}
+
 /**
  * Execute a parsed Query against an in-memory corpus.
  */
 export function executeQuery(files: CorpusFile[], program: Program, query: Query): QueryResult {
-    const warnings: string[] = [];
+    const rule = query.filter ? compileExpr(query.filter) : null;
+    let matched = rule ? files.filter((f) => rule.test(f.meta)) : files;
 
-    // 1. Targeting candidates.
-    const target = query.targeting ? compileExpr(lowerTargeting(query.targeting)) : null;
-    const candidates = target ? files.filter((f) => target.test(f.meta)) : files;
+    const defined = new Set<string>();
+    for (const s of program.schemas) for (const f of s.schema.fields) defined.add(f.name.toLowerCase());
 
-    // 2. Filters (ANDed).
-    const filters = query.filters.map((f) => compileExpr(lowerCondition(f.field, f.operator, f.value, false)));
-    let matched = candidates.filter((f) => filters.every((flt) => flt.test(f.meta)));
+    const read = distinctCaseless([...(rule?.refs ?? []), ...(query.sortBy ? [query.sortBy.field] : [])]);
+    const warnings = distinctCaseless([...read, ...(query.select ?? [])])
+        .filter((field) => !defined.has(field.toLowerCase()))
+        .map((field) => `field "${field}" is not defined in any schema`);
 
-    // 3. Typed field validation -> warnings.
-    const scoped = scopeSchemas(candidates, program, target !== null);
-    const fieldSet = schemaFieldSet(scoped);
-
-    const referenced = referencedFields(query);
-    const seenWarn = new Set<string>();
-    for (const field of referenced) {
-        if (!fieldSet.has(field.toLowerCase()) && !seenWarn.has(field.toLowerCase())) {
-            seenWarn.add(field.toLowerCase());
-            warnings.push(`field "${field}" is not defined in any schema in scope`);
-        }
-    }
-
-    // 4. Sort.
     if (query.sortBy) {
         const { field, dir } = query.sortBy;
         const factor = dir === "desc" ? -1 : 1;
@@ -355,13 +221,11 @@ export function executeQuery(files: CorpusFile[], program: Program, query: Query
         });
     }
 
-    // 5. Limit.
     if (query.limit !== undefined) {
         matched = matched.slice(0, query.limit);
     }
 
-    // 6. Columns / projection.
-    const columns = query.select ?? distinctReferencedColumns(query);
+    const columns = query.select ?? read;
 
     const rows: QueryRow[] = matched.map((f) => {
         const values: Record<string, unknown> = {};
@@ -372,41 +236,4 @@ export function executeQuery(files: CorpusFile[], program: Program, query: Query
     });
 
     return { rows, warnings, columns };
-}
-
-/** Fields referenced anywhere in the query (filters + sortBy + select). */
-function referencedFields(query: Query): string[] {
-    const out: string[] = [];
-    for (const f of query.filters) out.push(f.field);
-    if (query.sortBy) out.push(query.sortBy.field);
-    if (query.select) out.push(...query.select);
-    return out;
-}
-
-/** Distinct fields referenced across filters + sortBy, in first-seen order. */
-function distinctReferencedColumns(query: Query): string[] {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    const push = (f: string) => {
-        const k = f.toLowerCase();
-        if (!seen.has(k)) {
-            seen.add(k);
-            out.push(f);
-        }
-    };
-    for (const f of query.filters) push(f.field);
-    if (query.sortBy) push(query.sortBy.field);
-    return out;
-}
-
-/**
- * Schemas in scope for the query's field warnings. With no targeting, all
- * enabled schemas are in scope; with targeting, a schema is in scope when any
- * targeted file matches it.
- */
-function scopeSchemas(candidates: CorpusFile[], program: Program, targeted: boolean): Schema[] {
-    const schemas = targeted
-        ? program.schemas.filter((s) => candidates.some((f) => s.matches(f.meta)))
-        : program.schemas;
-    return schemas.map((s) => s.schema);
 }

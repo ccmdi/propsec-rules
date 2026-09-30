@@ -15,4 +15,4 @@ export { computeCompletions, computeHover, keyAtPosition } from "./suggest.js";
 export type { CompletionSuggestion, HoverInfo, CompletionContext } from "./suggest.js";
 export { findFieldReferences, documentFieldSymbols } from "./nav.js";
 export { parseQuery, executeQuery } from "./query.js";
-export type { Query, QueryFilter, QueryRow, QueryResult } from "./query.js";
+export type { Query, QueryRow, QueryResult } from "./query.js";
