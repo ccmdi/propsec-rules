@@ -12,6 +12,7 @@ export { vocabulary } from "./expr/compile";
 export type { Word, ValueKind } from "./expr/compile";
 
 export { checkRule, completeRule, expandSnippet, helpersFor } from "./authoring";
+export { describeRule } from "./describe";
 export type { Completion, CompletionResult, RuleCheck, RuleContext, RuleSlot } from "./authoring";
 
 export type * from "./legacy/types";
