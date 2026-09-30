@@ -8,6 +8,11 @@ export { compileExpr, keyOf } from "./expr/compile";
 export type { Expr } from "./expr/compile";
 export { ExprError } from "./expr/parse";
 export { cmp } from "./expr/values";
+export { vocabulary } from "./expr/compile";
+export type { Word, ValueKind } from "./expr/compile";
+
+export { checkRule, completeRule, expandSnippet, helpersFor } from "./authoring";
+export type { Completion, CompletionResult, RuleCheck, RuleContext, RuleSlot } from "./authoring";
 
 export * from "./legacy/types";
 export * from "./legacy/operators";

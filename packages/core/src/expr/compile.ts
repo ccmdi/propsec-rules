@@ -60,26 +60,44 @@ function isRoot(node: Node, name: string, b: Build): boolean {
     return node.kind === "id" && node.name === name && !b.scope.has(name);
 }
 
-const FILE_FIELDS: Record<string, (file: FileMeta) => unknown> = {
-    path: f => f.path,
-    name: f => f.basename,
-    folder: f => f.parentPath,
-    tags: f => f.tags,
-    mtime: f => f.mtime,
-    ctime: f => f.ctime,
+export type ValueKind = "string" | "list" | "any";
+
+export interface Word {
+    name: string;
+    kind: "function" | "method" | "file";
+    doc: string;
+    insert: string;
+    on?: ValueKind;
+}
+
+const FILE_FIELDS: Record<string, { get: (file: FileMeta) => unknown; doc: string }> = {
+    path: { get: f => f.path, doc: "Path from the vault root, with extension" },
+    name: { get: f => f.basename, doc: "File name without extension" },
+    folder: { get: f => f.parentPath, doc: "Folder the file sits in directly (\"\" at the root)" },
+    tags: { get: f => f.tags, doc: "Tags from frontmatter and the body, without #" },
+    mtime: { get: f => f.mtime, doc: "Last modified time; compare with date(\"2026-01-01\")" },
+    ctime: { get: f => f.ctime, doc: "Created time; compare with date(\"2026-01-01\")" },
 };
 
-const FILE_METHODS: Record<string, (arg: string) => (file: FileMeta) => boolean> = {
-    hasTag: tag => {
-        const nested = tag + "/";
-        return f => {
-            for (const t of f.tags) if (t === tag || t.startsWith(nested)) return true;
-            return false;
-        };
+const FILE_METHODS: Record<string, { make: (arg: string) => (file: FileMeta) => boolean; doc: string; insert: string }> = {
+    hasTag: {
+        doc: "Has this tag or a nested tag under it",
+        insert: 'hasTag("${tag}")',
+        make: tag => {
+            const nested = tag + "/";
+            return f => {
+                for (const t of f.tags) if (t === tag || t.startsWith(nested)) return true;
+                return false;
+            };
+        },
     },
-    inFolder: folder => {
-        const prefix = folder + "/";
-        return f => f.path.startsWith(prefix);
+    inFolder: {
+        doc: "Is inside this folder or any folder below it",
+        insert: 'inFolder("${Folder}")',
+        make: folder => {
+            const prefix = folder + "/";
+            return f => f.path.startsWith(prefix);
+        },
     },
 };
 
@@ -118,12 +136,14 @@ function distinct(v: unknown): unknown {
     });
 }
 
-const FUNCTIONS: Record<string, { arity: number; fn: (...args: unknown[]) => unknown }> = {
-    size: { arity: 1, fn: size },
-    type: { arity: 1, fn: typeName },
-    string: { arity: 1, fn: v => (v == null ? null : show(v)) },
+const FUNCTIONS: Record<string, { arity: number; fn: (...args: unknown[]) => unknown; doc: string; insert: string }> = {
+    size: { arity: 1, fn: size, doc: "Length of a text, number of items in a list", insert: "size(${it})" },
+    type: { arity: 1, fn: typeName, doc: "\"string\", \"number\", \"boolean\", \"list\", \"map\", \"date\" or \"null\"", insert: "type(${it})" },
+    string: { arity: 1, fn: v => (v == null ? null : show(v)), doc: "The value as text", insert: "string(${it})" },
     number: {
         arity: 1,
+        doc: "The value as a number, or null",
+        insert: "number(${it})",
         fn: v => {
             const n = toNumber(v);
             return n === n ? n : null;
@@ -131,6 +151,8 @@ const FUNCTIONS: Record<string, { arity: number; fn: (...args: unknown[]) => unk
     },
     date: {
         arity: 1,
+        doc: "A date as milliseconds, for comparing with file.mtime and file.ctime",
+        insert: 'date("${2026-01-01}")',
         fn: v => {
             const t = typeof v === "number" ? v : v instanceof Date ? v.getTime() : typeof v === "string" ? new Date(v).getTime() : NaN;
             return t === t ? t : null;
@@ -138,18 +160,40 @@ const FUNCTIONS: Record<string, { arity: number; fn: (...args: unknown[]) => unk
     },
 };
 
-const METHODS: Record<string, { min: number; max: number; fn: (self: unknown, ...args: unknown[]) => unknown }> = {
-    matches: { min: 1, max: 2, fn: (v, pattern, flags) => matches(v, regex(pattern, flags)) },
-    contains: { min: 1, max: 1, fn: contains },
-    startsWith: { min: 1, max: 1, fn: (v, p) => typeof v === "string" && typeof p === "string" && v.startsWith(p) },
-    endsWith: { min: 1, max: 1, fn: (v, p) => typeof v === "string" && typeof p === "string" && v.endsWith(p) },
-    lower: { min: 0, max: 0, fn: v => (typeof v === "string" ? v.toLowerCase() : null) },
-    upper: { min: 0, max: 0, fn: v => (typeof v === "string" ? v.toUpperCase() : null) },
-    size: { min: 0, max: 0, fn: size },
-    distinct: { min: 0, max: 0, fn: distinct },
+interface Method {
+    min: number;
+    max: number;
+    fn: (self: unknown, ...args: unknown[]) => unknown;
+    doc: string;
+    insert: string;
+    on: ValueKind;
+}
+
+const METHODS: Record<string, Method> = {
+    matches: { min: 1, max: 2, fn: (v, pattern, flags) => matches(v, regex(pattern, flags)), on: "string", doc: "Matches a regular expression; pass \"i\" to ignore case", insert: 'matches("${^pattern}")' },
+    contains: { min: 1, max: 1, fn: contains, on: "any", doc: "Text contains a substring, or list contains an item", insert: 'contains("${value}")' },
+    startsWith: { min: 1, max: 1, fn: (v, p) => typeof v === "string" && typeof p === "string" && v.startsWith(p), on: "string", doc: "Text starts with a prefix", insert: 'startsWith("${prefix}")' },
+    endsWith: { min: 1, max: 1, fn: (v, p) => typeof v === "string" && typeof p === "string" && v.endsWith(p), on: "string", doc: "Text ends with a suffix", insert: 'endsWith("${suffix}")' },
+    lower: { min: 0, max: 0, fn: v => (typeof v === "string" ? v.toLowerCase() : null), on: "string", doc: "Text in lower case", insert: "lower()" },
+    upper: { min: 0, max: 0, fn: v => (typeof v === "string" ? v.toUpperCase() : null), on: "string", doc: "Text in upper case", insert: "upper()" },
+    size: { min: 0, max: 0, fn: size, on: "any", doc: "Length of a text, number of items in a list", insert: "size()" },
+    distinct: { min: 0, max: 0, fn: distinct, on: "list", doc: "The list without repeated items", insert: "distinct()" },
 };
 
-const QUANTIFIERS = ["exists", "all"];
+const QUANTIFIERS: Record<string, { doc: string; insert: string }> = {
+    exists: { doc: "Some item passes the rule; name the item first", insert: 'exists(x, ${x == ""})' },
+    all: { doc: "Every item passes the rule; name the item first", insert: 'all(x, ${x != ""})' },
+};
+
+export function vocabulary(): Word[] {
+    const words: Word[] = [{ name: "has", kind: "function", doc: "The property is present, even if empty", insert: "has(${property})" }];
+    for (const name of Object.keys(FUNCTIONS)) words.push({ name, kind: "function", doc: FUNCTIONS[name].doc, insert: FUNCTIONS[name].insert });
+    for (const name of Object.keys(METHODS)) words.push({ name, kind: "method", doc: METHODS[name].doc, insert: METHODS[name].insert, on: METHODS[name].on });
+    for (const name of Object.keys(QUANTIFIERS)) words.push({ name, kind: "method", doc: QUANTIFIERS[name].doc, insert: QUANTIFIERS[name].insert, on: "list" });
+    for (const name of Object.keys(FILE_FIELDS)) words.push({ name, kind: "file", doc: FILE_FIELDS[name].doc, insert: name });
+    for (const name of Object.keys(FILE_METHODS)) words.push({ name, kind: "file", doc: FILE_METHODS[name].doc, insert: FILE_METHODS[name].insert });
+    return words;
+}
 
 function literal(node: Node | undefined): node is Node & { kind: "lit" } {
     return node !== undefined && node.kind === "lit";
@@ -225,7 +269,7 @@ function quantifier(node: Node & { kind: "method" }, b: Build): Fn {
 
 function method(node: Node & { kind: "method" }, b: Build): Fn {
     if (isRoot(node.object, "file", b)) {
-        const make = FILE_METHODS[node.name];
+        const make = own.call(FILE_METHODS, node.name) ? FILE_METHODS[node.name].make : undefined;
         if (!make || node.args.length !== 1) throw new ExprError(`Unknown file.${node.name}()`, node.start);
         const first = node.args[0];
         if (literal(first) && typeof first.value === "string") return make(first.value);
@@ -236,7 +280,7 @@ function method(node: Node & { kind: "method" }, b: Build): Fn {
         };
     }
     const args = node.args.map(a => build(a, b));
-    const def = METHODS[node.name];
+    const def = own.call(METHODS, node.name) ? METHODS[node.name] : undefined;
     if (!def) throw new ExprError(`Unknown method ${node.name}`, node.start);
     if (args.length < def.min || args.length > def.max) throw new ExprError(`Wrong number of arguments for ${node.name}`, node.start);
     const self = build(node.object, b);
@@ -277,9 +321,8 @@ function build(node: Node, b: Build): Fn {
         }
         case "member": {
             if (isRoot(node.object, "file", b)) {
-                const get = FILE_FIELDS[node.name];
-                if (!get) throw new ExprError(`Unknown file.${node.name}`, node.start);
-                return get;
+                if (!own.call(FILE_FIELDS, node.name)) throw new ExprError(`Unknown file.${node.name}`, node.start);
+                return FILE_FIELDS[node.name].get;
             }
             if (isRoot(node.object, "note", b)) return property(node.name, b);
             const object = build(node.object, b);
@@ -311,7 +354,7 @@ function build(node: Node, b: Build): Fn {
                 if (node.args.length !== 1) throw new ExprError("has takes one argument", node.start);
                 return presence(node.args[0], b);
             }
-            const def = FUNCTIONS[node.name];
+            const def = own.call(FUNCTIONS, node.name) ? FUNCTIONS[node.name] : undefined;
             if (!def) throw new ExprError(`Unknown function ${node.name}`, node.start);
             if (node.args.length !== def.arity) throw new ExprError(`Wrong number of arguments for ${node.name}`, node.start);
             const arg = build(node.args[0], b);
@@ -323,7 +366,7 @@ function build(node: Node, b: Build): Fn {
             return (f, it, s) => fn(arg(f, it, s));
         }
         case "method":
-            return QUANTIFIERS.indexOf(node.name) >= 0 && node.args.length === 2 ? quantifier(node, b) : method(node, b);
+            return own.call(QUANTIFIERS, node.name) && node.args.length === 2 ? quantifier(node, b) : method(node, b);
         case "unary": {
             const arg = build(node.arg, b);
             if (node.op === "!") return (f, it, s) => arg(f, it, s) === false;
