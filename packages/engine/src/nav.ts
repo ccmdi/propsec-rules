@@ -1,4 +1,4 @@
-import { getMatchingSchemas, type PropsecConfig } from "@propsec/core";
+import { matching, type Program } from "@propsec/core";
 import type { Range } from "./position.js";
 import type { ParsedFrontmatter } from "./frontmatter.js";
 import type { CorpusFile } from "./corpus.js";
@@ -6,11 +6,10 @@ import type { CorpusFile } from "./corpus.js";
 /** True if any matched schema defines `key` (case-insensitive) as a field. */
 function schemaDefinesKey(
     files: CorpusFile,
-    config: PropsecConfig,
+    program: Program,
     lowerKey: string
 ): boolean {
-    const schemas = getMatchingSchemas(files.meta, config);
-    for (const schema of schemas) {
+    for (const { schema } of matching(program, files.meta)) {
         for (const field of schema.fields) {
             if (field.name.toLowerCase() === lowerKey) return true;
         }
@@ -24,7 +23,7 @@ function schemaDefinesKey(
  */
 export function findFieldReferences(
     files: CorpusFile[],
-    config: PropsecConfig,
+    program: Program,
     key: string
 ): Array<{ path: string; range: Range }> {
     const lowerKey = key.toLowerCase();
@@ -32,7 +31,7 @@ export function findFieldReferences(
     for (const file of files) {
         const fp = file.parsed.positions.get(lowerKey);
         if (!fp) continue;
-        if (!schemaDefinesKey(file, config, lowerKey)) continue;
+        if (!schemaDefinesKey(file, program, lowerKey)) continue;
         out.push({ path: file.meta.path, range: fp.keyRange });
     }
     return out;

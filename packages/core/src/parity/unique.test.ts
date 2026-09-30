@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeValueForUnique, findDuplicateViolations, type UniqueEntry } from "./unique";
-import type { SchemaMapping } from "../types";
+import { normalizeValueForUnique, findDuplicateViolations, type UniqueEntry } from "./harness";
+import type { SchemaMapping } from "../legacy/types";
 
 const mapping: SchemaMapping = {
   id: "s1",

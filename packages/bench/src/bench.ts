@@ -17,7 +17,7 @@ import {
     type ValueIndex,
 } from "@propsec/engine";
 import { computeDiagnostics } from "@propsec/lsp";
-import type { PropsecConfig } from "@propsec/core";
+import { compile, migrate, type Program } from "@propsec/core";
 import { generateVault, bookSchemaConfig } from "./genVault.js";
 
 // ---------- argv ----------
@@ -146,7 +146,7 @@ function printTable(rows: Row[]): void {
 
 // ---------- per-size benchmark ----------
 
-async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
+async function benchSize(size: number, program: Program): Promise<Row> {
     const dir = await mkdtemp(join(tmpdir(), `bench-${size}-`));
     try {
         await generateVault(dir, { count: size });
@@ -167,12 +167,12 @@ async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
         if (gc) gc();
         const heapMB = process.memoryUsage().heapUsed / 1e6;
 
-        const validate = measure(() => void validateCorpus(corpus, config), K_MEM);
-        const diagnostics = measure(() => void computeDiagnostics(corpus, config), K_MEM);
+        const validate = measure(() => void validateCorpus(corpus, program), K_MEM);
+        const diagnostics = measure(() => void computeDiagnostics(corpus, program), K_MEM);
         const valueIndex = measure(() => void buildValueIndex(corpus), K_MEM);
 
         const parsedQuery = parseQuery("Books where rating >= 3 sort by rating desc");
-        const query = measure(() => void executeQuery(corpus, config, parsedQuery), K_MEM);
+        const query = measure(() => void executeQuery(corpus, program, parsedQuery), K_MEM);
 
         // perEdit: rebuild ONE file's CorpusFile from its text and revalidate a snapshot.
         const editTarget = corpus[Math.floor(corpus.length / 2)];
@@ -188,7 +188,7 @@ async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
             const snapshot = corpus.slice();
             const idx = snapshot.indexOf(editTarget);
             snapshot[idx] = rebuilt;
-            void computeDiagnostics(snapshot, config);
+            void computeDiagnostics(snapshot, program);
         }, K_MEM);
 
         // completion context at a KEY position (line 1, char 0 = before `title:`).
@@ -204,13 +204,13 @@ async function benchSize(size: number, config: PropsecConfig): Promise<Row> {
         // completionFull = value-index rebuild + completion (what the server does per request).
         const completionFull = measure(() => {
             const vi = buildValueIndex(corpus);
-            void computeCompletions(ctx, config, vi);
+            void computeCompletions(ctx, program, vi);
         }, K_MEM);
 
         // completionWarm = completion alone against a prebuilt index.
         const prebuilt: ValueIndex = buildValueIndex(corpus);
         const completionWarm = measure(
-            () => void computeCompletions(ctx, config, prebuilt),
+            () => void computeCompletions(ctx, program, prebuilt),
             K_MEM
         );
 
@@ -375,7 +375,7 @@ async function main(): Promise<void> {
     const haveGc = ensureExposeGc();
 
     const { sizes } = parseArgs(process.argv.slice(2));
-    const config = bookSchemaConfig();
+    const program = compile(migrate(bookSchemaConfig()));
 
     console.log("propsec bench");
     console.log(`node ${process.version}, cpus ${os.cpus().length}`);
@@ -386,7 +386,7 @@ async function main(): Promise<void> {
     const rows: Row[] = [];
     for (const size of sizes) {
         process.stdout.write(`\nmeasuring size=${size} ... `);
-        const row = await benchSize(size, config);
+        const row = await benchSize(size, program);
         process.stdout.write("done");
         rows.push(row);
     }

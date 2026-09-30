@@ -1,19 +1,17 @@
 // Public API for @propsec/core
 
-export * from "./types";
-export * from "./operators";
-export * from "./constraintMeta";
+export * from "./model";
+export { compile, matching } from "./program";
+export type { CompiledSchema, Problem, Program } from "./program";
 
-export { validateFrontmatter } from "./validation/validate";
-export { validationContext } from "./validation/context";
-export * from "./validation/unique";
+export { compileExpr, keyOf } from "./expr/compile";
+export type { Expr } from "./expr/compile";
+export { ExprError } from "./expr/parse";
+export { cmp } from "./expr/values";
 
-export type * from "./query/fileMeta";
-export * from "./query/matcher";
-export * from "./query/targeting";
-
-export { buildLowerKeyMap, lookupKey, hasKey } from "./utils/object";
-export type { LowerKeyMap } from "./utils/object";
-
-export { groupFieldsByName, formatTypeDisplay, clearFieldConstraints } from "./utils/schema";
-export * from "./utils/constant";
+export * from "./legacy/types";
+export * from "./legacy/operators";
+export * from "./legacy/constraintMeta";
+export * from "./legacy/targeting";
+export * from "./legacy/fields";
+export { migrate, readConfig, lowerCondition, lowerTargeting } from "./legacy/migrate";

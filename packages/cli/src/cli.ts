@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { isWarningViolation } from "@propsec/core";
+import { compile, isWarningViolation } from "@propsec/core";
 import { loadCorpus, validateCorpus, parseQuery, executeQuery } from "@propsec/engine";
 import { loadConfig } from "./config.js";
 import { formatViolations, summaryLine } from "./format.js";
@@ -162,7 +162,7 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
     try {
         const config = loadConfig(configPath);
         const files = await loadCorpus(dir);
-        const violations = validateCorpus(files, config);
+        const violations = validateCorpus(files, compile(config));
 
         const body = formatViolations(violations, { color: args.color, rootDir: dir });
         const summary = summaryLine(violations);
@@ -208,7 +208,7 @@ async function runQuery(args: RunQueryArgs): Promise<RunResult> {
         const query = parseQuery(args.queryString);
         const config = loadConfig(args.configPath);
         const files = await loadCorpus(args.dir);
-        const result = executeQuery(files, config, query);
+        const result = executeQuery(files, compile(config), query);
 
         if (args.json) {
             return { exitCode: 0, stdout: JSON.stringify(result.rows, null, 2) };

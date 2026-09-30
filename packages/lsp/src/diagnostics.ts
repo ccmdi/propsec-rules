@@ -1,5 +1,5 @@
 import { Diagnostic, DiagnosticSeverity } from "vscode-languageserver";
-import { isWarningViolation, type PropsecConfig } from "@propsec/core";
+import { isWarningViolation, type Program } from "@propsec/core";
 import { validateCorpus, type CorpusFile, type LocatedViolation } from "@propsec/engine";
 
 /**
@@ -22,10 +22,10 @@ export function violationToDiagnostic(v: LocatedViolation): Diagnostic {
  */
 export function computeDiagnostics(
     files: CorpusFile[],
-    config: PropsecConfig
+    program: Program
 ): Map<string, Diagnostic[]> {
     const byPath = new Map<string, Diagnostic[]>();
-    for (const v of validateCorpus(files, config)) {
+    for (const v of validateCorpus(files, program)) {
         const list = byPath.get(v.filePath);
         const diag = violationToDiagnostic(v);
         if (list) list.push(diag);

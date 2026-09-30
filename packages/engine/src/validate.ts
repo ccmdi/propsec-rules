@@ -1,16 +1,4 @@
-import {
-    validateFrontmatter,
-    validationContext,
-    getMatchingSchemas,
-    findDuplicateViolations,
-    OBSIDIAN_NATIVE_PROPERTIES,
-    MALFORMED_SCHEMA,
-    type PropsecConfig,
-    type SchemaMapping,
-    type SchemaField,
-    type UniqueEntry,
-    type Violation,
-} from "@propsec/core";
+import { malformedViolation, type Program, type Violation } from "@propsec/core";
 import type { Range } from "./position.js";
 import type { CorpusFile } from "./corpus.js";
 
@@ -19,14 +7,6 @@ export interface LocatedViolation extends Violation {
 }
 
 const ZERO_RANGE: Range = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
-
-function lookupKeyCI(obj: Record<string, unknown>, key: string): string | undefined {
-    const lower = key.toLowerCase();
-    for (const k of Object.keys(obj)) {
-        if (k.toLowerCase() === lower) return k;
-    }
-    return undefined;
-}
 
 /**
  * Resolve a violation's field to a file-absolute Range.
@@ -58,97 +38,28 @@ function rangeForViolation(violation: Violation, file: CorpusFile): Range {
 }
 
 /**
- * Cross-file `unique` check. Builds UniqueEntry[] from the matched corpus files
- * and delegates duplicate detection to core's findDuplicateViolations.
- */
-function checkUniqueForSchema(
-    schema: SchemaMapping,
-    uniqueFields: SchemaField[],
-    matchedFiles: CorpusFile[],
-    sink: (file: CorpusFile, v: Violation) => void
-): void {
-    const byPath = new Map(matchedFiles.map((f) => [f.meta.path, f]));
-
-    for (const field of uniqueFields) {
-        const entries: UniqueEntry[] = [];
-        for (const file of matchedFiles) {
-            const fm = file.meta.frontmatter;
-            if (!fm) continue;
-            const actualKey = lookupKeyCI(fm, field.name);
-            if (!actualKey) continue;
-            entries.push({
-                filePath: file.meta.path,
-                basename: file.meta.basename,
-                value: fm[actualKey],
-            });
-        }
-
-        for (const v of findDuplicateViolations(schema, field.name, entries)) {
-            const file = byPath.get(v.filePath);
-            if (file) sink(file, v);
-        }
-    }
-}
-
-/**
  * Validate an in-memory corpus, producing position-aware violations.
  * Pure over CorpusFile[] — mirrors propsec's validator.ts but no fs/Obsidian.
  */
-export function validateCorpus(files: CorpusFile[], config: PropsecConfig): LocatedViolation[] {
-    validationContext.setCustomTypes(config.customTypes);
-
-    const checkUnknownFields = config.warnOnUnknownFields ?? true;
-    const allowObsidian = config.allowObsidianProperties ?? true;
-
-    // Collect raw violations per file (so unique can be re-emitted), tagged with the file.
+export function validateCorpus(files: CorpusFile[], program: Program): LocatedViolation[] {
     const collected: { file: CorpusFile; violation: Violation }[] = [];
+    const matched = program.schemas.map(() => [] as CorpusFile[]);
 
-    // Per-file schema validation + malformed.
     for (const file of files) {
-        if (file.parsed.malformed) {
-            collected.push({
-                file,
-                violation: {
-                    filePath: file.meta.path,
-                    schemaMapping: MALFORMED_SCHEMA,
-                    field: "frontmatter",
-                    type: "malformed_frontmatter",
-                    severity: "error",
-                    message: "Malformed YAML frontmatter (unparseable)",
-                },
-            });
-        }
-
-        const schemas = getMatchingSchemas(file.meta, config);
-        for (const schema of schemas) {
-            let violations = validateFrontmatter(file.meta.frontmatter, schema, file.meta.path, {
-                checkUnknownFields,
-            });
-            if (allowObsidian) {
-                violations = violations.filter(
-                    (v) =>
-                        v.type !== "unknown_field" ||
-                        !OBSIDIAN_NATIVE_PROPERTIES.includes(v.field)
-                );
-            }
-            for (const v of violations) collected.push({ file, violation: v });
-        }
-    }
-
-    // Cross-file unique, per schema, across all files matching that schema.
-    for (const schema of config.schemaMappings) {
-        if (!schema.enabled || !schema.query) continue;
-        const uniqueFields = schema.fields.filter((f) => f.unique === true);
-        if (uniqueFields.length === 0) continue;
-
-        const matchedFiles = files.filter((f) =>
-            getMatchingSchemas(f.meta, config).some((m) => m.id === schema.id)
-        );
-
-        checkUniqueForSchema(schema, uniqueFields, matchedFiles, (file, v) => {
-            collected.push({ file, violation: v });
+        if (file.parsed.malformed) collected.push({ file, violation: malformedViolation(file.meta.path) });
+        program.schemas.forEach((schema, i) => {
+            if (!schema.matches(file.meta)) return;
+            matched[i].push(file);
+            for (const violation of schema.check(file.meta)) collected.push({ file, violation });
         });
     }
+
+    program.schemas.forEach((schema, i) => {
+        const byPath = new Map(matched[i].map((f) => [f.meta.path, f]));
+        for (const violation of schema.duplicates(matched[i].map((f) => f.meta))) {
+            collected.push({ file: byPath.get(violation.filePath)!, violation });
+        }
+    });
 
     return collected.map(({ file, violation }) => ({
         ...violation,

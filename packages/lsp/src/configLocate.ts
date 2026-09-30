@@ -53,7 +53,7 @@ export function findFieldRange(
     const root = parseTree(configText);
     if (!root) return null;
 
-    const mappings = propNode(root, "schemaMappings");
+    const mappings = propNode(root, "schemas") ?? propNode(root, "schemaMappings");
     if (!mappings || mappings.type !== "array" || !mappings.children) return null;
 
     const schemaNode = mappings.children.find((el) => propValue(el, "id") === schemaId);

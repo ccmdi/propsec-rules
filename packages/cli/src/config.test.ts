@@ -21,10 +21,22 @@ describe("loadConfig", () => {
 
         const config = loadConfig(path);
 
-        expect(config.schemaMappings).toEqual([]);
-        expect(config.customTypes).toEqual([]);
-        expect(config.warnOnUnknownFields).toBe(true);
-        expect(config.allowObsidianProperties).toBe(true);
+        expect(config.schemas).toEqual([]);
+        expect(config.types).toEqual([]);
+        expect(config.unknownFields).toBe(true);
+        expect(config.openFields).toEqual(["aliases", "tags", "cssclasses", "cssclass"]);
+    });
+
+    it("loads the rule format as-is", async () => {
+        const path = join(dir, "propsec.config.json");
+        const schemas = [{ id: "b", name: "Book", enabled: true, where: 'file.inFolder("Books")', fields: [{ name: "rating", type: "number", required: true, must: "it <= 5" }] }];
+        await writeFile(path, JSON.stringify({ schemas, unknownFields: false }), "utf8");
+
+        const config = loadConfig(path);
+
+        expect(config.schemas).toEqual(schemas);
+        expect(config.unknownFields).toBe(false);
+        expect(config.openFields).toEqual([]);
     });
 
     it("preserves explicit values over defaults", async () => {
@@ -41,8 +53,8 @@ describe("loadConfig", () => {
 
         const config = loadConfig(path);
 
-        expect(config.warnOnUnknownFields).toBe(false);
-        expect(config.allowObsidianProperties).toBe(false);
+        expect(config.unknownFields).toBe(false);
+        expect(config.openFields).toEqual([]);
     });
 
     it("throws with the path in the message when the file is missing", () => {

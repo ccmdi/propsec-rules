@@ -1,11 +1,11 @@
 import {
     type PropertyOperator,
-    type PropsecConfig,
-    type SchemaMapping,
-    buildLowerKeyMap,
-    lookupKey,
-    evaluatePropertyOperator,
-    fileMatchesQuery,
+    type Program,
+    type Schema,
+    compileExpr,
+    keyOf,
+    lowerCondition,
+    lowerTargeting,
 } from "@propsec/core";
 import type { CorpusFile } from "./corpus.js";
 
@@ -266,40 +266,12 @@ export function parseQuery(input: string): Query {
 
 /** Read a frontmatter value by case-insensitive key; undefined if absent. */
 function getValue(frontmatter: Record<string, unknown> | undefined, field: string): unknown {
-    if (!frontmatter) return undefined;
-    const map = buildLowerKeyMap(frontmatter);
-    const key = lookupKey(map, field);
-    return key === undefined ? undefined : frontmatter[key];
-}
-
-function keyExists(frontmatter: Record<string, unknown> | undefined, field: string): boolean {
-    if (!frontmatter) return false;
-    const map = buildLowerKeyMap(frontmatter);
-    return lookupKey(map, field) !== undefined;
-}
-
-/**
- * Evaluate a single filter against a file's frontmatter, mirroring how
- * query/matcher.ts treats missing properties.
- */
-function filterPasses(frontmatter: Record<string, unknown> | undefined, filter: QueryFilter): boolean {
-    const { operator, value } = filter;
-    const exists = keyExists(frontmatter, filter.field);
-
-    if (operator === "exists") return exists;
-    if (operator === "not_exists") return !exists;
-
-    if (!exists) {
-        // Missing prop matches the negative operators (as in matcher.ts evaluateCondition).
-        return operator === "not_equals" || operator === "not_contains";
-    }
-
-    const propValue = getValue(frontmatter, filter.field);
-    return evaluatePropertyOperator(propValue, operator, value);
+    const key = keyOf(frontmatter, field, field.toLowerCase());
+    return key === undefined ? undefined : frontmatter![key];
 }
 
 /** Distinct schema-defined field names across the given schemas. */
-function schemaFieldSet(schemas: SchemaMapping[]): Set<string> {
+function schemaFieldSet(schemas: Schema[]): Set<string> {
     const set = new Set<string>();
     for (const s of schemas) {
         for (const f of s.fields) set.add(f.name.toLowerCase());
@@ -344,21 +316,19 @@ function compareValues(a: unknown, b: unknown): number {
 /**
  * Execute a parsed Query against an in-memory corpus.
  */
-export function executeQuery(files: CorpusFile[], config: PropsecConfig, query: Query): QueryResult {
+export function executeQuery(files: CorpusFile[], program: Program, query: Query): QueryResult {
     const warnings: string[] = [];
 
     // 1. Targeting candidates.
-    const candidates = query.targeting
-        ? files.filter((f) => fileMatchesQuery(f.meta, query.targeting!))
-        : files;
+    const target = query.targeting ? compileExpr(lowerTargeting(query.targeting)) : null;
+    const candidates = target ? files.filter((f) => target.test(f.meta)) : files;
 
     // 2. Filters (ANDed).
-    let matched = candidates.filter((f) =>
-        query.filters.every((flt) => filterPasses(f.meta.frontmatter, flt))
-    );
+    const filters = query.filters.map((f) => compileExpr(lowerCondition(f.field, f.operator, f.value, false)));
+    let matched = candidates.filter((f) => filters.every((flt) => flt.test(f.meta)));
 
     // 3. Typed field validation -> warnings.
-    const scoped = scopeSchemas(files, config, query.targeting);
+    const scoped = scopeSchemas(candidates, program, target !== null);
     const fieldSet = schemaFieldSet(scoped);
 
     const referenced = referencedFields(query);
@@ -430,21 +400,13 @@ function distinctReferencedColumns(query: Query): string[] {
 }
 
 /**
- * Schemas whose targeting overlaps the query targeting. With no targeting,
- * all configured schemas are in scope. With targeting, a schema is in scope
- * when any file the targeting selects also matches that schema's own query
- * (overlap by the targeting DSL, ignoring property filters/exclusions so the
- * scope is about WHICH schema applies, not per-file validity).
+ * Schemas in scope for the query's field warnings. With no targeting, all
+ * enabled schemas are in scope; with targeting, a schema is in scope when any
+ * targeted file matches it.
  */
-function scopeSchemas(
-    files: CorpusFile[],
-    config: PropsecConfig,
-    targeting: string | undefined
-): SchemaMapping[] {
-    if (!targeting) return config.schemaMappings;
-
-    const candidates = files.filter((f) => fileMatchesQuery(f.meta, targeting));
-    return config.schemaMappings.filter(
-        (s) => s.query && candidates.some((f) => fileMatchesQuery(f.meta, s.query))
-    );
+function scopeSchemas(candidates: CorpusFile[], program: Program, targeted: boolean): Schema[] {
+    const schemas = targeted
+        ? program.schemas.filter((s) => candidates.some((f) => s.matches(f.meta)))
+        : program.schemas;
+    return schemas.map((s) => s.schema);
 }

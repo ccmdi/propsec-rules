@@ -1,10 +1,10 @@
 import {
-    getMatchingSchemas,
+    matching,
     groupFieldsByName,
-    type PropsecConfig,
-    type SchemaField,
-    type SchemaMapping,
+    type Field,
     type FileMeta,
+    type Program,
+    type Schema,
 } from "@propsec/core";
 import type { Position, Range } from "./position.js";
 import type { ParsedFrontmatter } from "./frontmatter.js";
@@ -47,11 +47,11 @@ function inFrontmatterContent(parsed: ParsedFrontmatter, position: Position): bo
  * tracking which schema each group came from.
  */
 function fieldGroupForKey(
-    schemas: SchemaMapping[],
+    schemas: Schema[],
     key: string
-): { variants: SchemaField[]; schemaNames: string[] } {
+): { variants: Field[]; schemaNames: string[] } {
     const lower = key.toLowerCase();
-    const variants: SchemaField[] = [];
+    const variants: Field[] = [];
     const schemaNames: string[] = [];
     for (const schema of schemas) {
         const groups = groupFieldsByName(schema.fields);
@@ -65,14 +65,14 @@ function fieldGroupForKey(
     return { variants, schemaNames };
 }
 
-function flagSuffix(variants: SchemaField[]): string {
+function flagSuffix(variants: Field[]): string {
     if (variants.some((v) => v.required)) return " (required)";
     if (variants.some((v) => v.warn)) return " (recommended)";
     return "";
 }
 
 /** Distinct variant types, in first-seen order. */
-function variantTypes(variants: SchemaField[]): string[] {
+function variantTypes(variants: Field[]): string[] {
     const out: string[] = [];
     for (const v of variants) {
         if (!out.includes(v.type)) out.push(v.type);
@@ -82,7 +82,7 @@ function variantTypes(variants: SchemaField[]): string[] {
 
 export function computeCompletions(
     ctx: CompletionContext,
-    config: PropsecConfig,
+    program: Program,
     valueIndex: ValueIndex
 ): CompletionSuggestion[] {
     if (!inFrontmatterContent(ctx.parsed, ctx.position)) return [];
@@ -98,17 +98,21 @@ export function computeCompletions(
 
     const colonIdx = before.indexOf(":");
     if (colonIdx === -1) {
-        return keyCompletions(ctx, config);
+        return keyCompletions(ctx, program);
     }
     const key = before.slice(0, colonIdx).trim();
-    return valueCompletions(key, config, valueIndex, ctx);
+    return valueCompletions(key, program, valueIndex, ctx);
 }
 
-function keyCompletions(ctx: CompletionContext, config: PropsecConfig): CompletionSuggestion[] {
-    const schemas = getMatchingSchemas(ctx.fileMeta, config);
+function matchedSchemas(ctx: CompletionContext, program: Program): Schema[] {
+    return matching(program, ctx.fileMeta).map((s) => s.schema);
+}
+
+function keyCompletions(ctx: CompletionContext, program: Program): CompletionSuggestion[] {
+    const schemas = matchedSchemas(ctx, program);
     if (schemas.length === 0) return [];
 
-    const allFields: SchemaField[] = schemas.flatMap((s) => s.fields);
+    const allFields: Field[] = schemas.flatMap((s) => s.fields);
     const groups = groupFieldsByName(allFields);
 
     const present = new Set<string>(
@@ -133,11 +137,11 @@ function keyCompletions(ctx: CompletionContext, config: PropsecConfig): Completi
 
 function valueCompletions(
     key: string,
-    config: PropsecConfig,
+    program: Program,
     valueIndex: ValueIndex,
     ctx: CompletionContext
 ): CompletionSuggestion[] {
-    const schemas = getMatchingSchemas(ctx.fileMeta, config);
+    const schemas = matchedSchemas(ctx, program);
     const { variants } = fieldGroupForKey(schemas, key);
 
     const seen = new Set<string>();
@@ -198,36 +202,20 @@ export function keyAtPosition(ctx: CompletionContext): { key: string; range: Ran
     return null;
 }
 
-function constraintBullets(variants: SchemaField[]): string[] {
+function constraintBullets(variants: Field[]): string[] {
     const bullets: string[] = [];
     for (const v of variants) {
-        const sc = v.stringConstraints;
-        if (sc?.pattern !== undefined) bullets.push(`pattern: \`${sc.pattern}\``);
-        if (sc?.minLength !== undefined) bullets.push(`minLength: ${sc.minLength}`);
-        if (sc?.maxLength !== undefined) bullets.push(`maxLength: ${sc.maxLength}`);
-
-        const nc = v.numberConstraints;
-        if (nc?.min !== undefined) bullets.push(`min: ${nc.min}`);
-        if (nc?.max !== undefined) bullets.push(`max: ${nc.max}`);
-
-        const dc = v.dateConstraints;
-        if (dc?.min !== undefined) bullets.push(`date min: ${dc.min}`);
-        if (dc?.max !== undefined) bullets.push(`date max: ${dc.max}`);
-
-        const ac = v.arrayConstraints;
-        if (ac?.minItems !== undefined) bullets.push(`minItems: ${ac.minItems}`);
-        if (ac?.maxItems !== undefined) bullets.push(`maxItems: ${ac.maxItems}`);
-        if (ac?.contains !== undefined) bullets.push(`contains: ${ac.contains.join(", ")}`);
+        if (v.when) bullets.push(`when: \`${v.when}\``);
+        if (v.must) bullets.push(`must: \`${v.must}\``);
     }
-    // Dedupe while preserving order (variants may repeat a constraint).
     return [...new Set(bullets)];
 }
 
-export function computeHover(ctx: CompletionContext, config: PropsecConfig): HoverInfo | null {
+export function computeHover(ctx: CompletionContext, program: Program): HoverInfo | null {
     const hk = keyAtPosition(ctx);
     if (!hk) return null;
 
-    const schemas = getMatchingSchemas(ctx.fileMeta, config);
+    const schemas = matchedSchemas(ctx, program);
     const { variants, schemaNames } = fieldGroupForKey(schemas, hk.key);
 
     if (variants.length === 0) {

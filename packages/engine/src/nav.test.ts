@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { PropsecConfig, SchemaMapping } from "@propsec/core";
+import { compile, migrate, type Program, type PropsecConfig, SchemaMapping } from "@propsec/core";
 import { buildFileMeta } from "./fileMeta.js";
 import type { CorpusFile } from "./corpus.js";
 import { keyAtPosition, type CompletionContext } from "./suggest.js";
@@ -18,13 +18,13 @@ function schema(
     };
 }
 
-function config(schemas: SchemaMapping[]): PropsecConfig {
-    return {
-        schemaMappings: schemas,
-        customTypes: [],
-        warnOnUnknownFields: true,
-        allowObsidianProperties: true,
-    };
+function config(schemas: SchemaMapping[]): Program {
+    return compile(migrate({
+            schemaMappings: schemas,
+            customTypes: [],
+            warnOnUnknownFields: true,
+            allowObsidianProperties: true,
+    }));
 }
 
 function corpusFile(path: string, content: string): CorpusFile {

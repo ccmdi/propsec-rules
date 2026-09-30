@@ -1,21 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PropsecConfig } from "@propsec/core";
+import { compile, readConfig, type Program } from "@propsec/core";
 
 const CONFIG_FILENAME = "propsec.config.json";
 
 /**
- * Load `<rootDir>/propsec.config.json` into a PropsecConfig.
- * Returns null (and logs) if the file is absent or invalid. A null config means
+ * Load and compile `<rootDir>/propsec.config.json`.
+ * Returns null (and logs) if the file is absent or invalid. A null program means
  * only malformed-frontmatter diagnostics are produced (no schema diagnostics).
- *
- * Mirrors @propsec/cli's loadConfig shape/defaults: schemaMappings required;
- * customTypes default [], warnOnUnknownFields default true, allowObsidianProperties default true.
  */
 export function loadConfig(
     rootDir: string,
     log: (msg: string) => void = console.error
-): PropsecConfig | null {
+): Program | null {
     const path = join(rootDir, CONFIG_FILENAME);
 
     let raw: string;
@@ -35,29 +32,15 @@ export function loadConfig(
         return null;
     }
 
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        log(`propsec: invalid config ${path}: expected a JSON object`);
+    try {
+        const program = compile(readConfig(parsed));
+        for (const p of program.problems) log(`propsec: ${p.owner}${p.field ? `.${p.field}` : ""}: ${p.message} in \`${p.source}\``);
+        return program;
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        log(`propsec: invalid config ${path}: ${detail}`);
         return null;
     }
-
-    const obj = parsed as Record<string, unknown>;
-    if (!Array.isArray(obj.schemaMappings)) {
-        log(`propsec: invalid config ${path}: "schemaMappings" must be an array`);
-        return null;
-    }
-
-    return {
-        schemaMappings: obj.schemaMappings,
-        customTypes: Array.isArray(obj.customTypes) ? obj.customTypes : [],
-        globalExclusions:
-            typeof obj.globalExclusions === "string" ? obj.globalExclusions : undefined,
-        warnOnUnknownFields:
-            typeof obj.warnOnUnknownFields === "boolean" ? obj.warnOnUnknownFields : true,
-        allowObsidianProperties:
-            typeof obj.allowObsidianProperties === "boolean"
-                ? obj.allowObsidianProperties
-                : true,
-    } as PropsecConfig;
 }
 
 export { CONFIG_FILENAME };

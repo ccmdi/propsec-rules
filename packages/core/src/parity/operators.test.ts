@@ -6,16 +6,18 @@ import {
     evaluatePropertyOperator,
     evaluateNumericComparison,
     compareCrossFieldValues,
+    getCrossFieldOperatorDisplay,
+} from "./harness";
+import {
     getOperatorDisplayName,
     getOperatorSymbol,
-    getCrossFieldOperatorDisplay,
     getOperatorsForPropertyType,
     getComparisonOperatorOptions,
     getPropertyOperatorOptions,
     COMPARISON_OPERATORS,
     PROPERTY_OPERATORS,
     OPERATOR_INFO,
-} from "./operators";
+} from "../legacy/operators";
 
 describe("operators", () => {
     describe("COMPARISON_OPERATORS", () => {

@@ -1,6 +1,6 @@
 import { relative, resolve } from "node:path";
 import { URI } from "vscode-uri";
-import type { PropsecConfig } from "@propsec/core";
+import type { Program } from "@propsec/core";
 import { buildFileMeta, loadCorpus, type CorpusFile } from "@propsec/engine";
 
 /** Normalize OS path separators to forward slashes (engine/targeting convention). */
@@ -17,14 +17,14 @@ function toForwardSlash(p: string): string {
  */
 export class CorpusStore {
     readonly rootDir: string;
-    config: PropsecConfig | null;
+    program: Program | null;
 
     private diskCorpus = new Map<string, CorpusFile>();
     private overlays = new Map<string, CorpusFile>();
 
-    constructor(rootDir: string, config: PropsecConfig | null) {
+    constructor(rootDir: string, program: Program | null) {
         this.rootDir = rootDir;
-        this.config = config;
+        this.program = program;
     }
 
     /** Convert an LSP document URI to a corpus-relative, forward-slash path. */

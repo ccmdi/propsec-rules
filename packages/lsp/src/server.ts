@@ -17,7 +17,7 @@ import {
 } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
-import { getMatchingSchemas, type PropsecConfig } from "@propsec/core";
+import { compile, matching, type Program } from "@propsec/core";
 import {
     buildFileMeta,
     buildValueIndex,
@@ -35,7 +35,7 @@ import { suggestionToCompletionItem, hoverInfoToHover } from "./completion.js";
 import { findFieldRange } from "./configLocate.js";
 import { loadConfig, CONFIG_FILENAME } from "./config.js";
 
-const EMPTY_CONFIG: PropsecConfig = { schemaMappings: [], customTypes: [] };
+const EMPTY_PROGRAM: Program = compile({ schemas: [], types: [], unknownFields: true, openFields: [] });
 
 const DEBOUNCE_MS = 200;
 
@@ -66,8 +66,8 @@ export function startServer(connection: Connection): void {
      */
     function revalidate(): void {
         if (!store) return;
-        const map: Map<string, Diagnostic[]> = store.config
-            ? computeDiagnostics(store.snapshot(), store.config)
+        const map: Map<string, Diagnostic[]> = store.program
+            ? computeDiagnostics(store.snapshot(), store.program)
             : new Map();
 
         for (const doc of documents.all()) {
@@ -84,8 +84,8 @@ export function startServer(connection: Connection): void {
     connection.onInitialize((params: InitializeParams): InitializeResult => {
         const rootDir = rootFromParams(params);
         if (rootDir) {
-            const config = loadConfig(rootDir, (m) => connection.console.error(m));
-            store = new CorpusStore(rootDir, config);
+            const program = loadConfig(rootDir, (m) => connection.console.error(m));
+            store = new CorpusStore(rootDir, program);
             // Kick off the initial disk load, then validate whatever is already open.
             store
                 .reload()
@@ -126,16 +126,16 @@ export function startServer(connection: Connection): void {
     connection.onCompletion((params): CompletionItem[] => {
         const ctx = contextFor(params.textDocument.uri, params.position);
         if (!ctx) return [];
-        const config = store!.config ?? EMPTY_CONFIG;
+        const program = store!.program ?? EMPTY_PROGRAM;
         const valueIndex = buildValueIndex(store!.snapshot());
-        return computeCompletions(ctx, config, valueIndex).map(suggestionToCompletionItem);
+        return computeCompletions(ctx, program, valueIndex).map(suggestionToCompletionItem);
     });
 
     connection.onHover((params): Hover | null => {
         const ctx = contextFor(params.textDocument.uri, params.position);
         if (!ctx) return null;
-        const config = store!.config ?? EMPTY_CONFIG;
-        const info = computeHover(ctx, config);
+        const program = store!.program ?? EMPTY_PROGRAM;
+        const info = computeHover(ctx, program);
         return info ? hoverInfoToHover(info) : null;
     });
 
@@ -151,7 +151,7 @@ export function startServer(connection: Connection): void {
         const hk = keyAtPosition(ctx);
         if (!hk) return null;
 
-        const schemas = getMatchingSchemas(ctx.fileMeta, store!.config ?? EMPTY_CONFIG);
+        const schemas = matching(store!.program ?? EMPTY_PROGRAM, ctx.fileMeta).map((s) => s.schema);
         const lower = hk.key.toLowerCase();
         const defining = schemas.filter((s) =>
             s.fields.some((f) => f.name.toLowerCase() === lower)
@@ -181,8 +181,8 @@ export function startServer(connection: Connection): void {
         if (!ctx) return [];
         const hk = keyAtPosition(ctx);
         if (!hk) return [];
-        const config = store!.config ?? EMPTY_CONFIG;
-        return findFieldReferences(store!.snapshot(), config, hk.key).map(({ path, range }) => ({
+        const program = store!.program ?? EMPTY_PROGRAM;
+        return findFieldReferences(store!.snapshot(), program, hk.key).map(({ path, range }) => ({
             uri: store!.relPathToUri(path),
             range,
         }));
@@ -257,7 +257,7 @@ export function startServer(connection: Connection): void {
         );
         const reloadConfig = touchedConfig
             ? Promise.resolve().then(() => {
-                  store!.config = loadConfig(store!.rootDir, (m) => connection.console.error(m));
+                  store!.program = loadConfig(store!.rootDir, (m) => connection.console.error(m));
               })
             : Promise.resolve();
 

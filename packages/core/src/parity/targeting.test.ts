@@ -4,9 +4,9 @@ import {
     fileMatchesMapping,
     getMatchingSchemas,
     type PropsecConfig,
-} from "./targeting";
-import type { FileMeta } from "./fileMeta";
-import type { SchemaMapping } from "../types";
+} from "./harness";
+import type { FileMeta } from "../model";
+import type { SchemaMapping } from "../legacy/types";
 
 function makeFile(overrides: Partial<FileMeta> & { path: string }): FileMeta {
     const path = overrides.path;

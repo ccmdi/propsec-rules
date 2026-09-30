@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver";
-import type { PropsecConfig, SchemaMapping } from "@propsec/core";
+import { compile, migrate, type Program, type PropsecConfig, SchemaMapping } from "@propsec/core";
 import { buildFileMeta, type CorpusFile } from "@propsec/engine";
 import { computeDiagnostics, violationToDiagnostic } from "./diagnostics.js";
 
@@ -15,14 +15,14 @@ function schema(over: Partial<SchemaMapping> & Pick<SchemaMapping, "fields">): S
     };
 }
 
-function config(schemas: SchemaMapping[], over?: Partial<PropsecConfig>): PropsecConfig {
-    return {
-        schemaMappings: schemas,
-        customTypes: [],
-        warnOnUnknownFields: true,
-        allowObsidianProperties: true,
-        ...over,
-    };
+function config(schemas: SchemaMapping[], over?: Partial<PropsecConfig>): Program {
+    return compile(migrate({
+            schemaMappings: schemas,
+            customTypes: [],
+            warnOnUnknownFields: true,
+            allowObsidianProperties: true,
+            ...over,
+    }));
 }
 
 const file = (path: string, content: string): CorpusFile =>

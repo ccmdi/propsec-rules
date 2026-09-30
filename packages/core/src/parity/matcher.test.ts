@@ -1,14 +1,8 @@
 import { describe, it, expect } from "vitest";
-import {
-    parseQuerySegments,
-    describeQuery,
-    validateQuery,
-    fileMatchesQuery,
-    fileMatchesPropertyFilter,
-    describePropertyFilter,
-} from "./matcher";
-import type { FileMeta } from "./fileMeta";
-import type { PropertyFilter } from "../types";
+import { parseQuerySegments, describeQuery, validateQuery, describePropertyFilter } from "../legacy/targeting";
+import { fileMatchesQuery, fileMatchesPropertyFilter } from "./harness";
+import type { FileMeta } from "../model";
+import type { PropertyFilter } from "../legacy/types";
 
 /**
  * Build a FileMeta for tests. Derives parentPath/basename from path so callers

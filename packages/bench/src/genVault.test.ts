@@ -8,7 +8,7 @@ import {
     parseFrontmatter,
     type CorpusFile,
 } from "@propsec/engine";
-import { getMatchingSchemas } from "@propsec/core";
+import { compile, matching, migrate } from "@propsec/core";
 import { generateVault, bookSchemaConfig } from "./genVault.js";
 
 async function walkMd(dir: string): Promise<string[]> {
@@ -24,7 +24,7 @@ async function walkMd(dir: string): Promise<string[]> {
 describe("generateVault", () => {
     let dir: string;
     let corpus: CorpusFile[];
-    const config = bookSchemaConfig();
+    const config = compile(migrate(bookSchemaConfig()));
 
     beforeAll(async () => {
         dir = await mkdtemp(join(tmpdir(), "bench-gen-"));
@@ -58,10 +58,10 @@ describe("generateVault", () => {
 
     it("the config matches generated files (Book schema applies)", () => {
         const matched = corpus.filter(
-            (f) => getMatchingSchemas(f.meta, config).length > 0
+            (f) => matching(config, f.meta).length > 0
         );
         expect(matched.length).toBe(20);
-        expect(getMatchingSchemas(corpus[0].meta, config)[0].name).toBe("Book");
+        expect(matching(config, corpus[0].meta)[0].schema.name).toBe("Book");
     });
 
     it("dupRate > 0 yields at least one duplicate isbn across files", () => {

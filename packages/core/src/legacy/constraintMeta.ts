@@ -1,4 +1,4 @@
-import type { FieldType } from "./types";
+import type { FieldType } from "../model";
 
 export type ConstraintInput = "text" | "integer" | "number" | "date" | "string-list" | "boolean";
 

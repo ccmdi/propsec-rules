@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { groupFieldsByName, clearFieldConstraints, formatTypeDisplay } from "./schema";
-import { SchemaField } from "../types";
+import { groupFieldsByName } from "../model";
+import { clearFieldConstraints, formatTypeDisplay } from "./fields";
+import { SchemaField } from "./types";
 
 describe("utils/schema", () => {
     describe("groupFieldsByName", () => {

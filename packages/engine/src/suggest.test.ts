@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { PropsecConfig, SchemaMapping, SchemaField } from "@propsec/core";
+import { compile, migrate, type Program, type PropsecConfig, SchemaMapping, SchemaField } from "@propsec/core";
 import { buildFileMeta } from "./fileMeta.js";
 import { buildValueIndex, type ValueIndex } from "./valueIndex.js";
 import {
@@ -21,14 +21,14 @@ function schema(
     };
 }
 
-function config(schemas: SchemaMapping[], over?: Partial<PropsecConfig>): PropsecConfig {
-    return {
-        schemaMappings: schemas,
-        customTypes: [],
-        warnOnUnknownFields: true,
-        allowObsidianProperties: true,
-        ...over,
-    };
+function config(schemas: SchemaMapping[], over?: Partial<PropsecConfig>): Program {
+    return compile(migrate({
+            schemaMappings: schemas,
+            customTypes: [],
+            warnOnUnknownFields: true,
+            allowObsidianProperties: true,
+            ...over,
+    }));
 }
 
 function ctxFor(path: string, content: string, position: Position): CompletionContext {
@@ -290,8 +290,7 @@ describe("computeHover", () => {
         expect(md).toContain("`title`: string");
         expect(md).toContain("_(required)_");
         expect(md).toContain("The book title"); // description
-        expect(md).toContain("minLength: 1"); // a constraint
-        expect(md).toContain("maxLength: 200");
+        expect(md).toContain("- must: `size(it) >= 1 && size(it) <= 200`");
         expect(md).toContain("from schema: **Book**");
         // range equals the key's keyRange.
         expect(hover!.range).toEqual(ctx.parsed.positions.get("title")!.keyRange);
@@ -311,7 +310,7 @@ describe("computeHover", () => {
         expect(hover!.contents).toContain("· unique");
     });
 
-    it("number constraints render as bullets", () => {
+    it("number constraints render as a must rule", () => {
         const s = schema({
             query: "Books/*",
             name: "Book",
@@ -322,8 +321,7 @@ describe("computeHover", () => {
         const content = "---\nrating: 3\n---\n";
         const ctx = ctxFor("Books/x.md", content, { line: 1, character: 2 });
         const hover = computeHover(ctx, config([s]));
-        expect(hover!.contents).toContain("- min: 0");
-        expect(hover!.contents).toContain("- max: 5");
+        expect(hover!.contents).toContain("- must: `it >= 0 && it <= 5`");
     });
 
     it("key present but not in any matched schema -> not-defined hover", () => {

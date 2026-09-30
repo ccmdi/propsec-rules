@@ -69,7 +69,7 @@ describe("run check", () => {
         expect(stdout).toMatch(/Type mismatch: rating/);
         expect(stdout).toMatch(/Unknown field: extra/);
         // number_too_large
-        expect(stdout).toMatch(/Number too large: rating is 9/);
+        expect(stdout).toContain("Constraint failed: rating must satisfy it <= 5 (got 9)");
         // duplicate_value on both files
         expect(stdout).toContain("Books/BNW.md");
         expect(stdout).toContain("Books/F451.md");

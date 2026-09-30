@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { validateFrontmatter } from "./validate";
-import { validationContext } from "./context";
-import { SchemaMapping, SchemaField } from "../types";
+import { validateFrontmatter, validationContext } from "./harness";
+import { SchemaMapping, SchemaField } from "../legacy/types";
 
 // Helper to create a minimal schema mapping
 function createSchema(fields: SchemaField[], query = "test/*"): SchemaMapping {

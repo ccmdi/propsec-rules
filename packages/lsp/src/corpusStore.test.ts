@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PropsecConfig } from "@propsec/core";
+import { compile, type Program } from "@propsec/core";
 import { CorpusStore } from "./corpusStore.js";
 
-function emptyConfig(): PropsecConfig {
-    return { schemaMappings: [], customTypes: [], warnOnUnknownFields: true, allowObsidianProperties: true };
+function emptyConfig(): Program {
+    return compile({ schemas: [], types: [], unknownFields: true, openFields: [] });
 }
 
 describe("CorpusStore path helpers", () => {
