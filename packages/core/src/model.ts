@@ -60,6 +60,7 @@ export interface Config {
     schemas: Schema[];
     types: TypeDef[];
     unknownFields: boolean;
+    exclude?: string;
     openFields: string[];
 }
 

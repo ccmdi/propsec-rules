@@ -247,6 +247,8 @@ export function compile(config: Config): Program {
     }
 
     const open = new Set(config.openFields.map(f => f.toLowerCase()));
+    const excluded = expressions(config.exclude, "exclude", undefined, false);
+    const exclude = excluded !== null && excluded.length > 0 ? excluded[0].test : NEVER;
 
     const schemas = config.schemas.filter(s => s.enabled).map((schema): CompiledSchema => {
         const where = expressions(schema.where, schema.id, undefined, false);
@@ -258,7 +260,7 @@ export function compile(config: Config): Program {
 
         return {
             schema,
-            matches: file => matches(file),
+            matches: file => matches(file) && !exclude(file),
             check: file => {
                 const sink: Sink = { file, schema: ref, out: [] };
                 const fm = file.frontmatter;

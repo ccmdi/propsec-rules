@@ -168,9 +168,8 @@ function lowerField(field: SchemaField, nested: boolean): Field {
     return out;
 }
 
-function lowerSchema(mapping: SchemaMapping, exclusions: string | undefined): Schema {
+function lowerSchema(mapping: SchemaMapping): Schema {
     const where = [lowerTargeting(mapping.query)];
-    if (exclusions) where.push(not(lowerTargeting(exclusions)));
     if (mapping.propertyFilter) where.push(...lowerFilter(mapping.propertyFilter));
     return {
         id: mapping.id,
@@ -194,6 +193,7 @@ export function readConfig(value: unknown): Config {
             types: Array.isArray(obj.types) ? (obj.types as TypeDef[]) : [],
             unknownFields: typeof obj.unknownFields === "boolean" ? obj.unknownFields : true,
             openFields: Array.isArray(obj.openFields) ? (obj.openFields as string[]) : [],
+            exclude: typeof obj.exclude === "string" && obj.exclude.trim() !== "" ? obj.exclude : undefined,
         };
     }
     if (!Array.isArray(obj.schemaMappings)) throw new Error(`"schemas" (or the older "schemaMappings") must be an array`);
@@ -208,9 +208,10 @@ export function readConfig(value: unknown): Config {
 
 export function migrate(legacy: PropsecConfig): Config {
     return {
-        schemas: legacy.schemaMappings.map(m => lowerSchema(m, legacy.globalExclusions)),
+        schemas: legacy.schemaMappings.map(lowerSchema),
         types: legacy.customTypes.map(lowerType),
         unknownFields: legacy.warnOnUnknownFields ?? true,
         openFields: (legacy.allowObsidianProperties ?? true) ? OBSIDIAN_NATIVE_PROPERTIES : [],
+        exclude: legacy.globalExclusions?.trim() ? lowerTargeting(legacy.globalExclusions) : undefined,
     };
 }
