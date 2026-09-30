@@ -205,7 +205,8 @@ export function compile(config: Config): Program {
             const root = parse(source);
             return (split ? conjuncts(root) : [root]).map(n => compileNode(n, source.slice(n.start, n.end)));
         } catch (e) {
-            problems.push({ owner, field, source, message: e instanceof Error ? e.message : String(e) });
+            const detail = e instanceof Error ? e.message : String(e);
+            problems.push({ owner, field, source, message: `${owner}${field ? `.${field}` : ""}: ${detail} in \`${source}\`` });
             return null;
         }
     };

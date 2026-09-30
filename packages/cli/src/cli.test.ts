@@ -46,6 +46,23 @@ afterEach(async () => {
 });
 
 describe("run check", () => {
+    it("checks a rule-format config and rejects rules that do not parse", async () => {
+        const schema = (must: string) => ({
+            schemas: [{ id: "b", name: "Book", enabled: true, where: 'file.inFolder("Books")', fields: [{ name: "tags", type: "array", required: true, must }] }],
+        });
+        const note = { "Books/Dune.md": `---\ntags: [owned]\n---\n` };
+
+        const ok = await makeVault({ ...note, "propsec.config.json": JSON.stringify(schema('it.exists(t, t.startsWith("genre/"))')) });
+        const checked = await run(["check", ok, "--no-color"], process.cwd());
+        expect(checked.exitCode).toBe(1);
+        expect(checked.stdout).toContain('Constraint failed: tags must satisfy it.exists(t, t.startsWith("genre/"))');
+
+        const bad = await makeVault({ ...note, "propsec.config.json": JSON.stringify(schema("it.exists(t,")) });
+        const rejected = await run(["check", bad, "--no-color"], process.cwd());
+        expect(rejected.exitCode).toBe(2);
+        expect(rejected.stdout).toContain("Invalid rule: b.tags:");
+    });
+
     it("reports violations with file:line:col and a summary, exit 1", async () => {
         const dir = await makeVault({
             "propsec.config.json": JSON.stringify(BOOK_CONFIG),

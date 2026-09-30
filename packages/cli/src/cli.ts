@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { compile, isWarningViolation } from "@propsec/core";
+import { compile, isWarningViolation, type Config, type Program } from "@propsec/core";
 import { loadCorpus, validateCorpus, parseQuery, executeQuery } from "@propsec/engine";
 import { loadConfig } from "./config.js";
 import { formatViolations, summaryLine } from "./format.js";
@@ -162,7 +162,7 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
     try {
         const config = loadConfig(configPath);
         const files = await loadCorpus(dir);
-        const violations = validateCorpus(files, compile(config));
+        const violations = validateCorpus(files, compileStrict(config));
 
         const body = formatViolations(violations, { color: args.color, rootDir: dir });
         const summary = summaryLine(violations);
@@ -180,6 +180,15 @@ export async function run(argv: string[], cwd: string): Promise<RunResult> {
         const message = err instanceof Error ? err.message : String(err);
         return { exitCode: 2, stdout: message };
     }
+}
+
+/** Compile a config, failing on any rule that does not parse. */
+function compileStrict(config: Config): Program {
+    const program = compile(config);
+    if (program.problems.length > 0) {
+        throw new Error(program.problems.map((p) => `Invalid rule: ${p.message}`).join("\n"));
+    }
+    return program;
 }
 
 /** Resolve the config path: explicit --config, else <dir>, then <cwd> default. */
@@ -208,7 +217,7 @@ async function runQuery(args: RunQueryArgs): Promise<RunResult> {
         const query = parseQuery(args.queryString);
         const config = loadConfig(args.configPath);
         const files = await loadCorpus(args.dir);
-        const result = executeQuery(files, compile(config), query);
+        const result = executeQuery(files, compileStrict(config), query);
 
         if (args.json) {
             return { exitCode: 0, stdout: JSON.stringify(result.rows, null, 2) };

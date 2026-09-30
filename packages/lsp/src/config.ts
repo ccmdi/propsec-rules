@@ -34,7 +34,7 @@ export function loadConfig(
 
     try {
         const program = compile(readConfig(parsed));
-        for (const p of program.problems) log(`propsec: ${p.owner}${p.field ? `.${p.field}` : ""}: ${p.message} in \`${p.source}\``);
+        for (const p of program.problems) log(`propsec: ${p.message}`);
         return program;
     } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);
