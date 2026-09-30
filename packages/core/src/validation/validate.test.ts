@@ -472,6 +472,38 @@ describe("validateFrontmatter", () => {
             expect(violations[0].type).toBe("array_missing_value");
         });
 
+        it("validates array containsPattern", () => {
+            const schema = createSchema([
+                field("tags", "array", {
+                    required: true,
+                    arrayConstraints: { containsPattern: ["^obj/", "^field/"] },
+                }),
+            ]);
+
+            expect(validateFrontmatter({ tags: ["obj/concept", "field/math", "other"] }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(0);
+
+            const missingOne = validateFrontmatter({ tags: ["obj/concept", "subfield/math"] }, schema, "test.md", { checkUnknownFields: false });
+            expect(missingOne).toHaveLength(1);
+            expect(missingOne[0].type).toBe("array_missing_value");
+            expect(missingOne[0].expected).toBe("^field/");
+
+            expect(validateFrontmatter({ tags: [] }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(2);
+        });
+
+        it("skips an invalid containsPattern regex", () => {
+            const schema = createSchema([
+                field("tags", "array", {
+                    required: true,
+                    arrayConstraints: { containsPattern: ["[", "^obj/"] },
+                }),
+            ]);
+
+            expect(validateFrontmatter({ tags: ["obj/concept"] }, schema, "test.md", { checkUnknownFields: false }))
+                .toHaveLength(0);
+        });
+
         it("validates array uniqueItems", () => {
             const schema = createSchema([
                 field("tags", "array", {

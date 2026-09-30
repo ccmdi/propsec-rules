@@ -585,6 +585,21 @@ function checkArrayConstraints(
         }
     }
 
+    if (constraints.containsPattern && constraints.containsPattern.length > 0) {
+        for (const pattern of constraints.containsPattern) {
+            try {
+                const regex = new RegExp(pattern);
+                if (!value.some(v => regex.test(String(v)))) {
+                    violations.push(createViolation(
+                        filePath, schema, path, "array_missing_value",
+                        `Array missing value: ${path} must contain an item matching /${pattern}/`,
+                        pattern
+                    ));
+                }
+            } catch { /* invalid regex */ }
+        }
+    }
+
     if (constraints.allowedValues && constraints.allowedValues.length > 0) {
         const allowed = constraints.allowedValues;
         for (let i = 0; i < value.length; i++) {

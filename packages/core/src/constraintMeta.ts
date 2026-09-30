@@ -54,6 +54,7 @@ export const CONSTRAINT_GROUPS: ConstraintGroupMeta[] = [
             { key: "minItems", label: "Min items:", input: "integer" },
             { key: "maxItems", label: "Max items:", input: "integer" },
             { key: "contains", label: "Contains:", input: "string-list", placeholder: "value1, value2" },
+            { key: "containsPattern", label: "Contains pattern (regex):", input: "string-list", placeholder: "e.g., ^obj/, ^field/" },
             { key: "allowedValues", label: "Allowed values:", input: "string-list", placeholder: "value1, value2" },
             { key: "uniqueItems", label: "Unique items:", input: "boolean" },
         ],

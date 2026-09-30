@@ -60,6 +60,7 @@ export interface ArrayConstraints {
     minItems?: number;
     maxItems?: number;
     contains?: string[];  // Array must contain all these values
+    containsPattern?: string[];  // Each regex must match at least one element
     uniqueItems?: boolean;  // Array items must be unique
     allowedValues?: string[];  // Every element must be one of these values
 }
