@@ -203,7 +203,7 @@ describe("run init dispatch", () => {
 
         expect(exitCode).toBe(0);
         const written = JSON.parse(await readFile(join(dir, "propsec.config.json"), "utf8"));
-        expect(written.schemaMappings).toEqual(BOOK_CONFIG.schemaMappings);
+        expect(written.schemas.map((s: { where: string }) => s.where)).toEqual(['file.inFolder("Books")']);
         expect(written).not.toHaveProperty("templatesFolder");
         expect(stdout).toMatch(/1 schema, 0 custom types/);
     });

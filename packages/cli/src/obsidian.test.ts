@@ -16,8 +16,10 @@ const CUSTOM_TYPE = {
     fields: [{ name: "fullName", type: "string", required: true }],
 };
 
+const RULE_SCHEMA = { id: "book", name: "Book", enabled: true, where: 'file.inFolder("Books")', fields: [{ name: "title", type: "string", required: true }] };
+
 describe("buildConfigFromObsidian", () => {
-    it("extracts the relevant subset and drops UI-only keys", () => {
+    it("converts older plugin data to rules and drops UI-only keys", () => {
         const { config, schemaCount, customTypeCount } = buildConfigFromObsidian({
             schemaMappings: [SCHEMA],
             customTypes: [CUSTOM_TYPE],
@@ -33,73 +35,56 @@ describe("buildConfigFromObsidian", () => {
         });
 
         expect(config).toEqual({
-            schemaMappings: [SCHEMA],
-            customTypes: [CUSTOM_TYPE],
-            globalExclusions: "#status/archived",
-            warnOnUnknownFields: false,
-            allowObsidianProperties: false,
+            schemas: [RULE_SCHEMA],
+            types: [CUSTOM_TYPE],
+            exclude: 'file.hasTag("status/archived")',
+            unknownFields: false,
+            openFields: [],
         });
         expect(schemaCount).toBe(1);
         expect(customTypeCount).toBe(1);
-
-        // Explicitly assert the junk is gone.
-        expect(config).not.toHaveProperty("templatesFolder");
-        expect(config).not.toHaveProperty("showInStatusBar");
-        expect(config).not.toHaveProperty("validateOnFileOpen");
-        expect(config).not.toHaveProperty("colorStatusBarErrors");
-        expect(config).not.toHaveProperty("enablePropertySuggestions");
     });
 
-    it("defaults customTypes to [] and the two booleans to true when absent", () => {
+    it("reads current plugin data and drops UI-only keys", () => {
+        const { config } = buildConfigFromObsidian({
+            version: 2,
+            schemas: [RULE_SCHEMA],
+            types: [],
+            exclude: 'file.inFolder("Templates")',
+            unknownFields: true,
+            openFields: ["tags"],
+            templatesFolder: "Templates",
+            showInStatusBar: true,
+        });
+
+        expect(config).toEqual({
+            schemas: [RULE_SCHEMA],
+            types: [],
+            exclude: 'file.inFolder("Templates")',
+            unknownFields: true,
+            openFields: ["tags"],
+        });
+    });
+
+    it("defaults types to [] and unknown-field warnings on when absent", () => {
         const { config, schemaCount, customTypeCount } = buildConfigFromObsidian({
             schemaMappings: [SCHEMA],
         });
 
-        expect(config.customTypes).toEqual([]);
-        expect(config.warnOnUnknownFields).toBe(true);
-        expect(config.allowObsidianProperties).toBe(true);
+        expect(config.types).toEqual([]);
+        expect(config.unknownFields).toBe(true);
+        expect(config.openFields).toEqual(["aliases", "tags", "cssclasses", "cssclass"]);
         expect(schemaCount).toBe(1);
         expect(customTypeCount).toBe(0);
     });
 
-    it("defaults customTypes to [] when it is not an array", () => {
-        const { config } = buildConfigFromObsidian({
-            schemaMappings: [],
-            customTypes: "nope",
-        });
-        expect(config.customTypes).toEqual([]);
+    it("omits the exclusion rule when there is none", () => {
+        expect(buildConfigFromObsidian({ schemaMappings: [] }).config).not.toHaveProperty("exclude");
+        expect(buildConfigFromObsidian({ schemaMappings: [], globalExclusions: "" }).config).not.toHaveProperty("exclude");
     });
 
-    it("preserves globalExclusions when a string (including empty)", () => {
-        const withValue = buildConfigFromObsidian({
-            schemaMappings: [],
-            globalExclusions: "#archived",
-        });
-        expect(withValue.config.globalExclusions).toBe("#archived");
-
-        const empty = buildConfigFromObsidian({
-            schemaMappings: [],
-            globalExclusions: "",
-        });
-        expect(empty.config.globalExclusions).toBe("");
-    });
-
-    it("omits globalExclusions when absent or not a string", () => {
-        const absent = buildConfigFromObsidian({ schemaMappings: [] });
-        expect(absent.config).not.toHaveProperty("globalExclusions");
-
-        const wrongType = buildConfigFromObsidian({
-            schemaMappings: [],
-            globalExclusions: 123,
-        });
-        expect(wrongType.config).not.toHaveProperty("globalExclusions");
-    });
-
-    it("throws when schemaMappings is missing", () => {
+    it("throws when there are no schemas", () => {
         expect(() => buildConfigFromObsidian({ customTypes: [] })).toThrow(/schemaMappings/);
-    });
-
-    it("throws when schemaMappings is not an array", () => {
         expect(() => buildConfigFromObsidian({ schemaMappings: {} })).toThrow(/schemaMappings/);
     });
 

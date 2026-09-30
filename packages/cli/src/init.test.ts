@@ -51,11 +51,14 @@ const DATA_JSON = {
 };
 
 const EXPECTED_CONFIG = {
-    schemaMappings: SCHEMAS,
-    customTypes: CUSTOM_TYPES,
-    globalExclusions: "#status/archived",
-    warnOnUnknownFields: true,
-    allowObsidianProperties: true,
+    schemas: [
+        { id: "book", name: "Book", enabled: true, where: 'file.inFolder("Books")', fields: SCHEMAS[0].fields },
+        { id: "note", name: "Note", enabled: true, where: 'file.hasTag("note")', fields: SCHEMAS[1].fields },
+    ],
+    types: CUSTOM_TYPES,
+    exclude: 'file.hasTag("status/archived")',
+    unknownFields: true,
+    openFields: ["aliases", "tags", "cssclasses", "cssclass"],
 };
 
 const createdDirs: string[] = [];
