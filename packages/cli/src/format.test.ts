@@ -26,6 +26,7 @@ function v(
         schemaMapping: SCHEMA,
         field: rest.field ?? "f",
         type: rest.type,
+        severity: rest.severity ?? "error",
         message: rest.message ?? "msg",
         range: {
             start: { line, character: char },
@@ -50,7 +51,7 @@ describe("formatViolations", () => {
         const out = formatViolations(
             [
                 v({ filePath: "a.md", type: "type_mismatch", line: 0, char: 0 }),
-                v({ filePath: "a.md", type: "unknown_field", line: 1, char: 0 }),
+                v({ filePath: "a.md", type: "unknown_field", severity: "warning", line: 1, char: 0 }),
             ],
             { color: false, rootDir: "/root" }
         );
@@ -80,7 +81,7 @@ describe("formatViolations", () => {
         const out = formatViolations(
             [
                 v({ filePath: "a.md", type: "type_mismatch", line: 0, char: 0 }),
-                v({ filePath: "b.md", type: "unknown_field", line: 0, char: 0 }),
+                v({ filePath: "b.md", type: "unknown_field", severity: "warning", line: 0, char: 0 }),
             ],
             { color: false, rootDir: "/root" }
         );
@@ -104,7 +105,7 @@ describe("summarize", () => {
     it("counts errors, warnings, and distinct files", () => {
         const result = summarize([
             v({ filePath: "a.md", type: "type_mismatch", line: 0, char: 0 }),
-            v({ filePath: "a.md", type: "unknown_field", line: 1, char: 0 }),
+            v({ filePath: "a.md", type: "unknown_field", severity: "warning", line: 1, char: 0 }),
             v({ filePath: "b.md", type: "missing_required", line: 0, char: 0 }),
         ]);
         expect(result).toEqual({ errors: 2, warnings: 1, files: 2 });
@@ -120,7 +121,7 @@ describe("summaryLine", () => {
         const line = summaryLine([
             v({ filePath: "a.md", type: "type_mismatch", line: 0, char: 0 }),
             v({ filePath: "a.md", type: "missing_required", line: 1, char: 0 }),
-            v({ filePath: "a.md", type: "unknown_field", line: 2, char: 0 }),
+            v({ filePath: "a.md", type: "unknown_field", severity: "warning", line: 2, char: 0 }),
             v({ filePath: "b.md", type: "type_mismatch", line: 0, char: 0 }),
         ]);
         expect(line).toBe("3 errors, 1 warning in 2 files");

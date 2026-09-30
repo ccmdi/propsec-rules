@@ -2,12 +2,18 @@ import { FieldType, FieldCondition, SchemaField, SchemaMapping, Violation, Viola
 import { validationContext } from "./context";
 import { buildLowerKeyMap, lookupKey, LowerKeyMap } from "../utils/object";
 import { EXCLUDE_FIELDS, ISO_DATE_REGEX } from "../utils/constant";
-import { groupFieldsByName } from "../utils/schema";
+import { groupFieldsByName, isFieldWarned } from "../utils/schema";
 import {
     getCrossFieldOperatorDisplay,
     compareCrossFieldValues,
     evaluatePropertyOperator,
 } from "../operators";
+
+const WARNING_VIOLATION_TYPES: ViolationType[] = [
+    "missing_warned",
+    "type_mismatch_warned",
+    "unknown_field",
+];
 
 /**
  * Helper to create a violation object with consistent structure
@@ -21,7 +27,12 @@ function createViolation(
     expected?: string,
     actual?: string
 ): Violation {
-    return { filePath, schemaMapping: schema, field, type, message, expected, actual };
+    const severity = WARNING_VIOLATION_TYPES.includes(type) ? "warning" : "error";
+    return { filePath, schemaMapping: schema, field, type, severity, message, expected, actual };
+}
+
+function asWarnings(violations: Violation[]): Violation[] {
+    return violations.map(v => ({ ...v, severity: "warning" }));
 }
 
 /**
@@ -97,7 +108,7 @@ function validateField(
 
     // Check required/warned from applicable variants only
     const isRequired = applicableVariants.some(v => v.required);
-    const isWarned = !isRequired && applicableVariants.some(v => v.warn === true);
+    const isWarned = isFieldWarned(applicableVariants);
 
     // Key is missing entirely - required fields must have the key present
     if (!hasField) {
@@ -143,7 +154,8 @@ function validateField(
     }
 
     // Validate value with constraints and recurse into nested structures
-    violations.push(...validateValue(value, matchingVariant, path, filePath, schema, frontmatter, keyMap));
+    const valueViolations = validateValue(value, matchingVariant, path, filePath, schema, frontmatter, keyMap);
+    violations.push(...(isWarned ? asWarnings(valueViolations) : valueViolations));
 
     return violations;
 }
@@ -273,7 +285,7 @@ function validateCustomTypeObject(
         const fieldPath = `${path}.${fieldName}`;
         
         const isRequired = variants.some(v => v.required);
-        const isWarned = !isRequired && variants.some(v => v.warn === true);
+        const isWarned = isFieldWarned(variants);
 
         // Check required
         if (!hasField) {
@@ -306,7 +318,8 @@ function validateCustomTypeObject(
         }
 
         // Recurse with constraints using the matching variant
-        violations.push(...validateValue(value, matchingVariant, fieldPath, filePath, schema));
+        const valueViolations = validateValue(value, matchingVariant, fieldPath, filePath, schema);
+        violations.push(...(isWarned ? asWarnings(valueViolations) : valueViolations));
     }
 
     return violations;

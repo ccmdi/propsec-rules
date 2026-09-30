@@ -35,6 +35,7 @@ describe("violationToDiagnostic", () => {
             schemaMapping: schema({ fields: [] }),
             field: "count",
             type: "type_mismatch",
+            severity: "error",
             message: "Expected number",
             range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } },
         });
@@ -53,6 +54,7 @@ describe("violationToDiagnostic", () => {
             schemaMapping: schema({ fields: [] }),
             field: "extra",
             type: "unknown_field",
+            severity: "warning",
             message: "Unknown field",
             range: { start: { line: 2, character: 0 }, end: { line: 2, character: 5 } },
         });

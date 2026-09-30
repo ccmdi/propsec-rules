@@ -1,4 +1,5 @@
 import type { SchemaMapping, Violation } from "../types";
+import { isFieldWarned } from "../utils/schema";
 
 /** Normalize a value to a string for duplicate comparison. (Verbatim from the plugin/engine.) */
 export function normalizeValueForUnique(value: unknown): string {
@@ -34,6 +35,7 @@ export function findDuplicateViolations(
     const arr = groups.get(key);
     if (arr) arr.push(e); else groups.set(key, [e]);
   }
+  const severity = isFieldWarned(mapping.fields.filter(f => f.name === fieldName)) ? "warning" : "error";
   const out: Violation[] = [];
   for (const [valueStr, members] of groups) {
     if (members.length < 2) continue;
@@ -44,6 +46,7 @@ export function findDuplicateViolations(
         schemaMapping: mapping,
         field: fieldName,
         type: "duplicate_value",
+        severity,
         message: `Duplicate value: "${valueStr}" also in: ${others.join(", ")}`,
         actual: valueStr,
       });

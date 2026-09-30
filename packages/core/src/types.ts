@@ -71,7 +71,7 @@ export interface SchemaField {
     required: boolean;
     // Human-readable documentation for this field (metadata only; not used by validation)
     description?: string;
-    // Warn if missing (mutually exclusive with required - either warn or required, not both)
+    // Report this field's violations as warnings (mutually exclusive with required - either warn or required, not both)
     //TODO discrim union
     warn?: boolean;
     // Value must be unique across all files matching the schema
@@ -208,28 +208,24 @@ export type ViolationType =
     | "array_disallowed_value"
     | "string_disallowed_value";
 
+export type ViolationSeverity = "error" | "warning";
+
 export interface Violation {
     filePath: string;
     schemaMapping: SchemaMapping;
     field: string;
     type: ViolationType;
+    severity: ViolationSeverity;
     message: string;
     expected?: string;
     actual?: string;
 }
 
-// Warning types are violations that are informational rather than errors
-export const WARNING_VIOLATION_TYPES: ViolationType[] = [
-    "missing_warned",
-    "type_mismatch_warned",
-    "unknown_field",
-];
-
 /**
  * Check if a violation is a warning (vs an error)
  */
 export function isWarningViolation(violation: Violation): boolean {
-    return WARNING_VIOLATION_TYPES.includes(violation.type);
+    return violation.severity === "warning";
 }
 
 // Filter type for violation views

@@ -113,6 +113,7 @@ export function validateCorpus(files: CorpusFile[], config: PropsecConfig): Loca
                     schemaMapping: MALFORMED_SCHEMA,
                     field: "frontmatter",
                     type: "malformed_frontmatter",
+                    severity: "error",
                     message: "Malformed YAML frontmatter (unparseable)",
                 },
             });

@@ -122,6 +122,45 @@ describe("validateFrontmatter", () => {
             const violations = validateFrontmatter({}, schema, "test.md", { checkUnknownFields: false });
             expect(violations).toHaveLength(1);
             expect(violations[0].type).toBe("missing_warned");
+            expect(violations[0].severity).toBe("warning");
+        });
+
+        it("reports a warned field's constraint violations as warnings", () => {
+            const constraints = { arrayConstraints: { containsPattern: ["^obj/"] } };
+
+            const warned = validateFrontmatter(
+                { tags: ["other"] },
+                createSchema([field("tags", "array", { warn: true, ...constraints })]),
+                "test.md", { checkUnknownFields: false }
+            );
+            expect(warned).toHaveLength(1);
+            expect(warned[0].type).toBe("array_missing_value");
+            expect(warned[0].severity).toBe("warning");
+
+            const optional = validateFrontmatter(
+                { tags: ["other"] },
+                createSchema([field("tags", "array", constraints)]),
+                "test.md", { checkUnknownFields: false }
+            );
+            expect(optional).toHaveLength(1);
+            expect(optional[0].severity).toBe("error");
+        });
+
+        it("reports a warned field's type mismatch as a warning", () => {
+            const schema = createSchema([field("tags", "array", { warn: true })]);
+
+            const violations = validateFrontmatter({ tags: null }, schema, "test.md", { checkUnknownFields: false });
+            expect(violations).toHaveLength(1);
+            expect(violations[0].type).toBe("type_mismatch_warned");
+            expect(violations[0].severity).toBe("warning");
+        });
+
+        it("reports unknown fields as warnings", () => {
+            const schema = createSchema([field("title", "string")]);
+
+            const violations = validateFrontmatter({ extra: 1 }, schema, "test.md", { checkUnknownFields: true });
+            expect(violations).toHaveLength(1);
+            expect(violations[0].severity).toBe("warning");
         });
 
         it("does not report missing optional field", () => {

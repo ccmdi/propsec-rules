@@ -15,6 +15,13 @@ export function groupFieldsByName(fields: SchemaField[]): Map<string, SchemaFiel
 }
 
 /**
+ * A field is warned when no variant is required and at least one variant has warn set.
+ */
+export function isFieldWarned(variants: SchemaField[]): boolean {
+    return !variants.some(v => v.required) && variants.some(v => v.warn === true);
+}
+
+/**
  * Clear all constraint-related properties from a field.
  * Used when field type changes.
  */
