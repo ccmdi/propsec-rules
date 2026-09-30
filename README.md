@@ -1,22 +1,43 @@
-# mdlsp
+# propsec-rules
 
-Schema validation, autocomplete, and queries for Markdown frontmatter, in any editor. No Obsidian required.
-
-This is the propsec Obsidian plugin pulled out of Obsidian. The same schema checking, plus completion, hover, navigation, and a typed query language, over plain Markdown files.
+Typed, queryable frontmatter rules for Markdown.
 
 ## Why
 
-Frontmatter is freeform, so it drifts. You rename a field, leave an old one behind, type a number as a string. mdlsp checks your notes against schemas you define and shows you where they're wrong as you type. Your notes are untouched.
+Frontmatter is structured data with no structure enforced. Notes drift: a field gets renamed, an old one stays behind, a number is typed as a string.
 
-JSON Schema already handles per-file frontmatter checking. What it can't do is the vault-wide part: pick a schema from a note's own tags or folder, require a value to be unique across every note, or compare one field to another. That is the part mdlsp adds, and it works in any editor that speaks LSP.
+JSON Schema can check one file's frontmatter. However, it can't express the parts that make a folder of notes a dataset, such as which notes a schema applies to (by folder, tag, or another property), a value that must be unique across every note, or a field compared to another field. Many tools can read across notes, but they don't check anything.
+
+propsec-rules is both halves in one language. The rule that picks a schema's notes, the rule that checks a field, and the rule in a query are the same thing, evaluated by the same `propsec-rules` engine.
+
+## Rules
+
+```
+file.inFolder("Books") || file.hasTag("book")         which notes a schema covers
+size(it) >= 1 && size(it) <= 5                        what a field's value must be
+it.exists(t, t.matches("^genre/"))                    some item matches a pattern
+it >= started                                         compared to another property
+status == "finished"                                  when a field applies at all
+```
+
+A rule reads properties by name (`rating`, or `note["date created"]` for names with spaces), the field's own value as `it`, and the file as `file`: `path`, `name`, `folder`, `tags`, `mtime`, `ctime`, `inFolder(...)`, `hasTag(...)`. It has `&&`, `||`, `!`, comparisons, `in`, arithmetic, `has(x)`, `size(x)`, `date(x)`, and methods like `matches`, `contains`, `startsWith`, `exists(x, ...)` and `all(x, ...)`.
+
+The syntax follows [CEL](https://cel.dev), adjusted for frontmatter:
+
+| Frontmatter reality | Rule behavior |
+|---------------------|---------------|
+| Properties are often missing | A missing property is `null`, not an error |
+| YAML quoting is accidental | `"4"` and `4` compare as numbers |
+| Numbers have no int/float split | All numbers are one type, `it + 1` just works |
+| Values of different kinds | Never order against each other (`"abc" < 5` is false) |
+| Negating a missing property | `!x` is only true when `x` is exactly `false` |
 
 ## What you get
 
-- Diagnostics: wrong types, missing required fields, failed constraints, unknown fields, values duplicated across files, malformed YAML. Each one with a line and column.
-- Completion: the fields a note's schema expects (which schema depends on the note's tags and folder), plus values other notes already use for that field.
-- Hover: a field's type, flags, constraints, and which schema it came from.
-- Navigation: jump from a frontmatter key to its definition in the schema, and find every note that uses a field.
-- Query: `propsec query 'file.inFolder("Books") && rating > 4 sort by rating desc'`, run over the whole vault, using the same rules as the schemas.
+- **Checks:** wrong types, missing required fields, failed rules, unknown fields, values duplicated across notes, malformed YAML. Each with a line and column.
+- **Queries:** `propsec query 'file.inFolder("Books") && rating > 4 sort by rating desc limit 10'`
+- **Editor support:** diagnostics, completion (fields a note's schema expects, values other notes already use), hover, go-to-definition, find references.
+- **Rule authoring:** type-aware helpers ("at most N characters", "no duplicates"), completion inside rules, errors with positions, warnings for unknown properties, and a plain-words reading of any rule (`in Books or tagged #book`).
 
 ## Setup
 
@@ -25,9 +46,21 @@ npm install
 npm test
 ```
 
+### CLI
+
+Runs from source for now:
+
+```
+npx tsx packages/cli/src/bin.ts check ./vault
+npx tsx packages/cli/src/bin.ts query 'status == "reading" select title' ./vault --json
+npx tsx packages/cli/src/bin.ts init ./vault
+```
+
+`check` exits 1 on errors and 2 on a rule that doesn't parse, so it works in CI. `init` writes a config from an Obsidian propsec plugin's `data.json`.
+
 ### VSCode
 
-Open `clients/vscode` and press F5. In the window that opens, open a folder with a `propsec.config.json` at its root. Edit a note's frontmatter and you get diagnostics, completion, and hover.
+Open `clients/vscode` and press F5. In the new window, open a folder with a `propsec.config.json` at its root.
 
 ### Other editors
 
@@ -35,24 +68,25 @@ Build the server once and point your editor's LSP client at it for Markdown file
 
 ```
 npm run build --workspace propsec-vscode
-node /path/to/mdlsp/clients/vscode/dist/server.js --stdio
+node /path/to/propsec-rules/clients/vscode/dist/server.js --stdio
 ```
 
-### CLI
+### As a library
 
-Runs from source for now:
+```ts
+import { compile, readConfig } from "@propsec/core";
 
+const program = compile(readConfig(json));
+for (const schema of program.schemas) {
+    if (schema.matches(note)) report(schema.check(note));
+}
 ```
-npx tsx packages/cli/src/bin.ts check ./vault
-npx tsx packages/cli/src/bin.ts query 'status == "reading"' ./vault --json
-npx tsx packages/cli/src/bin.ts init ./vault
-```
 
-`init` builds a config from an existing Obsidian propsec plugin's `data.json`. `check` exits non-zero when there are errors, so it works in CI.
+`note` is a plain object: path, folder, name, tags, dates, and parsed frontmatter. `@propsec/engine` builds these from files on disk. Compiling a config takes well under a millisecond.
 
 ## Config
 
-A `propsec.config.json` at the root of the folder you open:
+`propsec.config.json` at the root of the folder you open:
 
 ```json
 {
@@ -75,35 +109,16 @@ A `propsec.config.json` at the root of the folder you open:
 }
 ```
 
-Everything that decides or checks something is a rule, written in one small expression language:
+| Key | Meaning |
+|-----|---------|
+| `where` | Rule picking the notes a schema covers |
+| `when` | Rule for when a field applies |
+| `must` | Rule a field's value must pass. Each part joined by `&&` is reported on its own |
+| `exclude` | Rule removing notes from every schema |
+| `unique` | Value must be unique across the schema's notes |
+| `openFields` | Properties never reported as unknown |
 
-- `where` picks the notes a schema applies to.
-- `when` makes a field apply only to some notes.
-- `must` checks a field's value, which the rule calls `it`. Each part joined by `&&` is reported on its own.
-- `exclude` removes notes from every schema.
+Field types are `string`, `number`, `boolean`, `date`, `array`, `object`, `null`, `unknown`, or a custom type. A field can be `required`, `warn` (soft), or `unique`. Repeat a field name with different types for a union (`string` and `null` give `string | null`). Custom types are named groups of fields, and they nest.
 
-A rule reads frontmatter by name (`rating`, or `note["date created"]` for names with spaces) and the file through `file`: `file.path`, `file.name`, `file.folder`, `file.tags`, `file.mtime`, `file.ctime`, `file.inFolder("Books")`, `file.hasTag("book")`. It has `&&`, `||`, `!`, comparisons, `in`, arithmetic, `has(x)`, `size(x)`, `date(x)`, and methods like `matches`, `contains`, `startsWith`, `exists(x, ...)` and `all(x, ...)`. The syntax follows CEL, with a few deliberate differences for frontmatter: a missing property is `null` rather than an error, all numbers are one type, `"4"` and `4` compare as numbers, values of different kinds never order against each other, and `!` is only true for `false`.
-
-Field types are `string`, `number`, `boolean`, `date`, `array`, `object`, `null`, `unknown`, or a custom type. A field can be `required`, `warn` (a soft requirement), or `unique`. Repeat a field name with different types to make a union, so two `status` entries typed `string` and `null` give `string | null`. Custom types are named groups of fields, and they nest.
-
-The older config format (`schemaMappings`) still loads and is converted on read.
-
-Tag matching currently reads the frontmatter `tags:` field only. Inline `#tags` in the body come later.
-
-## Performance
-
-Validation runs at around 140k files per second, and everything scales linearly with the number of notes. The first load parses every file once and writes the result to `<root>/.propsec/cache.json`, keyed by modification time, so later starts skip unchanged files. On a 10k-note vault that takes startup from about 5 seconds down to under one. Add `.propsec/` to your `.gitignore`.
-
-Run the benchmark with `npm run bench --workspace @propsec/bench`.
-
-## Layout
-
-npm workspaces. `@propsec/core` is the pure logic (types, validation, query matching) with no I/O. `@propsec/engine` reads and parses files, builds the index, and caches it. `@propsec/cli` and `@propsec/lsp` are thin layers over those, and `clients/vscode` bundles the server into an extension.
-
-## Status
-
-Validation, the CLI, the LSP, and the VSCode client all work. Still to come: body-level features (inline `#tags`, `[[wikilinks]]`, tasks), completion inside nested types, and folding the original Obsidian plugin back onto this core so the two stop carrying duplicate code.
-
-## License
-
-MIT
+## Development
+See [docs/development.md](docs/development.md).
