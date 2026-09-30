@@ -8,8 +8,7 @@ import type { Violation as OldViolation } from "./oracle/types";
 import { compile, matching } from "../program";
 import { compileExpr } from "../expr/compile";
 import { lowerCondition, lowerTargeting, migrate } from "../legacy/migrate";
-import type { PropertyOperator } from "../legacy/operators";
-import type { PropertyFilter, PropsecConfig, SchemaMapping } from "../legacy/types";
+import type { PropertyFilter, PropertyOperator, PropsecConfig, SchemaMapping } from "../legacy/types";
 import type { FileMeta, Violation } from "../model";
 
 export { validationContext };
@@ -20,7 +19,6 @@ export {
     compareStrings,
     evaluateNumericComparison,
     compareCrossFieldValues,
-    getCrossFieldOperatorDisplay,
 } from "./oracle/operators";
 export type { PropsecConfig };
 

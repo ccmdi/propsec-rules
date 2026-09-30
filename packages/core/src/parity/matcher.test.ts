@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseQuerySegments, describeQuery, validateQuery, describePropertyFilter } from "../legacy/targeting";
+import { parseQuerySegments } from "../legacy/targeting";
 import { fileMatchesQuery, fileMatchesPropertyFilter } from "./harness";
 import type { FileMeta } from "../model";
 import type { PropertyFilter } from "../legacy/types";
@@ -185,70 +185,6 @@ describe("parseQuerySegments", () => {
                 value: "book/fiction",
             });
         });
-    });
-});
-
-describe("describeQuery", () => {
-    it("describes simple queries", () => {
-        expect(describeQuery("*")).toBe("all files");
-        expect(describeQuery("folder/")).toBe("in folder/");
-        expect(describeQuery("folder/*")).toBe("in folder/ (recursive)");
-        expect(describeQuery("#book")).toBe("tagged #book");
-    });
-
-    it("describes OR queries", () => {
-        expect(describeQuery("folder/* or #tag")).toBe("in folder/ (recursive) or tagged #tag");
-    });
-
-    it("describes AND queries", () => {
-        expect(describeQuery("folder/* and #tag")).toBe("in folder/ (recursive) and tagged #tag");
-    });
-
-    it("describes NOT queries", () => {
-        const desc = describeQuery("folder/* not #draft");
-        expect(desc).toContain("in folder/ (recursive)");
-        expect(desc).toContain("not");
-        expect(desc).toContain("tagged #draft");
-    });
-
-    it("describes combined queries", () => {
-        const desc = describeQuery("Library/* and #book not #draft or #article");
-        expect(desc).toContain("in Library/ (recursive)");
-        expect(desc).toContain("tagged #book");
-        expect(desc).toContain("not");
-        expect(desc).toContain("tagged #draft");
-        expect(desc).toContain("or");
-        expect(desc).toContain("tagged #article");
-    });
-
-    it("describes empty query as No conditions", () => {
-        expect(describeQuery("")).toBe("No conditions");
-    });
-});
-
-describe("validateQuery", () => {
-    it("rejects empty query", () => {
-        expect(validateQuery("")).toEqual({ valid: false, error: "Query cannot be empty" });
-        expect(validateQuery("   ")).toEqual({ valid: false, error: "Query cannot be empty" });
-    });
-
-    it("accepts valid queries", () => {
-        expect(validateQuery("*")).toEqual({ valid: true });
-        expect(validateQuery("Library/* and #book")).toEqual({ valid: true });
-    });
-
-    it("treats a leading 'not' as a literal folder term (query is trimmed first)", () => {
-        // validateQuery trims before parsing, and the NOT split needs interior
-        // whitespace, so a leading "not" parses as a folder condition -> valid.
-        expect(validateQuery("not #draft")).toEqual({ valid: true });
-    });
-
-    it("skips empty OR branches but keeps the valid one", () => {
-        // A trailing/duplicate "or" yields an empty branch which is skipped.
-        const segments = parseQuerySegments("#book or ");
-        expect(segments).toHaveLength(1);
-        expect(segments[0].andConditions[0]).toEqual({ type: "tag", value: "book" });
-        expect(validateQuery("#book or ")).toEqual({ valid: true });
     });
 });
 
@@ -525,21 +461,3 @@ describe("fileMatchesPropertyFilter", () => {
     });
 });
 
-describe("describePropertyFilter", () => {
-    it("describes an empty filter as empty string", () => {
-        expect(describePropertyFilter({})).toBe("");
-    });
-
-    it("describes date and property parts", () => {
-        const desc = describePropertyFilter({
-            modifiedAfter: "2024-01-01",
-            hasProperty: "author",
-            notHasProperty: "draft",
-            conditions: [{ property: "type", operator: "equals", value: "book" }],
-        });
-        expect(desc).toContain("modified after 2024-01-01");
-        expect(desc).toContain('has "author"');
-        expect(desc).toContain('no "draft"');
-        expect(desc).toContain("type = book");
-    });
-});

@@ -22,6 +22,9 @@ export type FieldType = string;
 
 export const PRIMITIVE_TYPES: PrimitiveFieldType[] = ["string", "number", "boolean", "date", "array", "object", "null", "unknown"];
 
+// Obsidian's reserved frontmatter keys
+export const OBSIDIAN_NATIVE_PROPERTIES = ["aliases", "tags", "cssclasses", "cssclass"];
+
 export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isPrimitiveType(type: string): type is PrimitiveFieldType {
@@ -121,4 +124,19 @@ export function groupFieldsByName<T extends { name: string }>(fields: T[]): Map<
 
 export function isFieldWarned(variants: { required: boolean; warn?: boolean }[]): boolean {
     return !variants.some(v => v.required) && variants.some(v => v.warn === true);
+}
+
+/**
+ * Format a field's type for display.
+ * e.g., array with elementType "person" becomes "person[]"
+ */
+export function formatTypeDisplay(field: Field): string {
+    if (field.type === "array" && field.arrayElementType) {
+        return `${field.arrayElementType}[]`;
+    }
+    if (field.type === "object" && field.objectValueType) {
+        const keyType = field.objectKeyType || "string";
+        return `{ ${keyType}: ${field.objectValueType} }`;
+    }
+    return field.type;
 }

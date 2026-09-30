@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { validateFrontmatter, validationContext, fileMatchesQuery, fileMatchesPropertyFilter } from "./harness";
-import { PROPERTY_OPERATORS, COMPARISON_OPERATORS } from "../legacy/operators";
-import type { CustomType, PropertyFilter, SchemaField, SchemaMapping } from "../legacy/types";
+import type { ComparisonOperator, CustomType, PropertyFilter, PropertyOperator, SchemaField, SchemaMapping } from "../legacy/types";
+
+const COMPARISON_OPERATORS: ComparisonOperator[] = ["equals", "not_equals", "greater_than", "less_than", "greater_or_equal", "less_or_equal"];
+const PROPERTY_OPERATORS: PropertyOperator[] = [...COMPARISON_OPERATORS, "contains", "not_contains", "in", "not_in", "exists", "not_exists"];
 import type { FileMeta } from "../model";
 
 function rng(seed: number): () => number {

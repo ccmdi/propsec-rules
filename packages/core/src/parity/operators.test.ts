@@ -6,144 +6,17 @@ import {
     evaluatePropertyOperator,
     evaluateNumericComparison,
     compareCrossFieldValues,
-    getCrossFieldOperatorDisplay,
 } from "./harness";
-import {
-    getOperatorDisplayName,
-    getOperatorSymbol,
-    getOperatorsForPropertyType,
-    getComparisonOperatorOptions,
-    getPropertyOperatorOptions,
-    COMPARISON_OPERATORS,
-    PROPERTY_OPERATORS,
-    OPERATOR_INFO,
-} from "../legacy/operators";
 
 describe("operators", () => {
-    describe("COMPARISON_OPERATORS", () => {
-        it("contains 6 comparison operators", () => {
-            expect(COMPARISON_OPERATORS).toHaveLength(6);
-            expect(COMPARISON_OPERATORS).toContain("equals");
-            expect(COMPARISON_OPERATORS).toContain("not_equals");
-            expect(COMPARISON_OPERATORS).toContain("greater_than");
-            expect(COMPARISON_OPERATORS).toContain("less_than");
-            expect(COMPARISON_OPERATORS).toContain("greater_or_equal");
-            expect(COMPARISON_OPERATORS).toContain("less_or_equal");
-        });
-    });
 
-    describe("PROPERTY_OPERATORS", () => {
-        it("contains all comparison operators plus contains/not_contains", () => {
-            expect(PROPERTY_OPERATORS).toHaveLength(12);
-            expect(PROPERTY_OPERATORS).toContain("contains");
-            expect(PROPERTY_OPERATORS).toContain("not_contains");
-            COMPARISON_OPERATORS.forEach(op => {
-                expect(PROPERTY_OPERATORS).toContain(op);
-            });
-        });
-    });
 
-    describe("OPERATOR_INFO", () => {
-        it("has metadata for all property operators", () => {
-            PROPERTY_OPERATORS.forEach(op => {
-                expect(OPERATOR_INFO[op]).toBeDefined();
-                expect(OPERATOR_INFO[op].value).toBe(op);
-                expect(OPERATOR_INFO[op].label).toBeTruthy();
-                expect(OPERATOR_INFO[op].symbol).toBeTruthy();
-            });
-        });
-    });
 
-    describe("getOperatorDisplayName", () => {
-        it("returns label for known operators", () => {
-            expect(getOperatorDisplayName("equals")).toBe("equals");
-            expect(getOperatorDisplayName("not_equals")).toBe("not equals");
-            expect(getOperatorDisplayName("greater_than")).toBe("greater than");
-            expect(getOperatorDisplayName("contains")).toBe("contains");
-        });
-    });
 
-    describe("getOperatorSymbol", () => {
-        it("returns symbol for known operators", () => {
-            expect(getOperatorSymbol("equals")).toBe("=");
-            expect(getOperatorSymbol("not_equals")).toBe("!=");
-            expect(getOperatorSymbol("greater_than")).toBe(">");
-            expect(getOperatorSymbol("less_than")).toBe("<");
-            expect(getOperatorSymbol("greater_or_equal")).toBe(">=");
-            expect(getOperatorSymbol("less_or_equal")).toBe("<=");
-            expect(getOperatorSymbol("contains")).toBe("contains");
-        });
-    });
 
-    describe("getCrossFieldOperatorDisplay", () => {
-        it("returns human-readable operator descriptions", () => {
-            expect(getCrossFieldOperatorDisplay("equals")).toBe("equal to");
-            expect(getCrossFieldOperatorDisplay("not_equals")).toBe("not equal to");
-            expect(getCrossFieldOperatorDisplay("greater_than")).toBe("greater than");
-            expect(getCrossFieldOperatorDisplay("less_than")).toBe("less than");
-            expect(getCrossFieldOperatorDisplay("greater_or_equal")).toBe("greater than or equal to");
-            expect(getCrossFieldOperatorDisplay("less_or_equal")).toBe("less than or equal to");
-        });
-    });
 
-    describe("getOperatorsForPropertyType", () => {
-        it("returns numeric operators for number type", () => {
-            const ops = getOperatorsForPropertyType("number");
-            expect(ops).toContain("equals");
-            expect(ops).toContain("greater_than");
-            expect(ops).not.toContain("contains");
-        });
 
-        it("returns equals/not_equals for checkbox type", () => {
-            const ops = getOperatorsForPropertyType("checkbox");
-            expect(ops).toEqual(["equals", "not_equals", "exists", "not_exists"]);
-        });
 
-        it("returns comparison operators for date types", () => {
-            const ops = getOperatorsForPropertyType("date");
-            expect(ops).toContain("equals");
-            expect(ops).toContain("greater_than");
-            expect(ops).not.toContain("contains");
-
-            expect(getOperatorsForPropertyType("datetime")).toEqual(ops);
-        });
-
-        it("returns contains operators for array types", () => {
-            const arrayTypes = ["tags", "aliases", "multitext"];
-            arrayTypes.forEach(type => {
-                const ops = getOperatorsForPropertyType(type);
-                expect(ops).toContain("contains");
-                expect(ops).toContain("not_contains");
-            });
-        });
-
-        it("returns text operators for text and unknown types", () => {
-            const ops = getOperatorsForPropertyType("text");
-            expect(ops).toContain("equals");
-            expect(ops).toContain("contains");
-
-            expect(getOperatorsForPropertyType("unknown")).toEqual(ops);
-        });
-    });
-
-    describe("getComparisonOperatorOptions", () => {
-        it("returns options for all comparison operators", () => {
-            const options = getComparisonOperatorOptions();
-            expect(options).toHaveLength(6);
-            options.forEach(opt => {
-                expect(opt.value).toBeDefined();
-                expect(opt.label).toBeDefined();
-                expect(opt.symbol).toBeDefined();
-            });
-        });
-    });
-
-    describe("getPropertyOperatorOptions", () => {
-        it("returns options for all property operators", () => {
-            const options = getPropertyOperatorOptions();
-            expect(options).toHaveLength(12);
-        });
-    });
 
     describe("compareNumbers", () => {
         it("handles equals", () => {

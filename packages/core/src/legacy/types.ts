@@ -1,8 +1,14 @@
 import type { FieldType } from "../model";
-import type {
-    ComparisonOperator,
-    PropertyOperator,
-} from "./operators";
+
+export type ComparisonOperator =
+    | "equals"
+    | "not_equals"
+    | "greater_than"
+    | "less_than"
+    | "greater_or_equal"
+    | "less_or_equal";
+
+export type PropertyOperator = ComparisonOperator | "contains" | "not_contains" | "in" | "not_in" | "exists" | "not_exists";
 
 // Type definition - user-defined reusable types
 export interface CustomType {
@@ -126,6 +132,3 @@ export interface PropsecConfig {
     warnOnUnknownFields?: boolean;
     allowObsidianProperties?: boolean;
 }
-
-// Obsidian's reserved frontmatter keys
-export const OBSIDIAN_NATIVE_PROPERTIES = ["aliases", "tags", "cssclasses", "cssclass"];

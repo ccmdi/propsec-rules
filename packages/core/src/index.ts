@@ -14,9 +14,5 @@ export type { Word, ValueKind } from "./expr/compile";
 export { checkRule, completeRule, expandSnippet, helpersFor } from "./authoring";
 export type { Completion, CompletionResult, RuleCheck, RuleContext, RuleSlot } from "./authoring";
 
-export * from "./legacy/types";
-export * from "./legacy/operators";
-export * from "./legacy/constraintMeta";
-export * from "./legacy/targeting";
-export * from "./legacy/fields";
-export { migrate, readConfig, lowerCondition, lowerTargeting } from "./legacy/migrate";
+export type * from "./legacy/types";
+export { migrate, readConfig } from "./legacy/migrate";
