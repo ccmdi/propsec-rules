@@ -326,7 +326,7 @@ function build(node: Node, b: Build): Fn {
             return QUANTIFIERS.indexOf(node.name) >= 0 && node.args.length === 2 ? quantifier(node, b) : method(node, b);
         case "unary": {
             const arg = build(node.arg, b);
-            if (node.op === "!") return (f, it, s) => arg(f, it, s) !== true;
+            if (node.op === "!") return (f, it, s) => arg(f, it, s) === false;
             return (f, it, s) => {
                 const v = arg(f, it, s);
                 return typeof v === "number" ? -v : null;

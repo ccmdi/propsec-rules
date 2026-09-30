@@ -37,6 +37,14 @@ describe("expression language", () => {
         expect(test("missing < 5")).toBe(false);
     });
 
+    it("negates only booleans", () => {
+        expect(test("!archived", { archived: false })).toBe(true);
+        expect(test("!archived", { archived: true })).toBe(false);
+        expect(test("!archived", {})).toBe(false);
+        expect(test("!status", { status: "draft" })).toBe(false);
+        expect(test("archived != true", {})).toBe(true);
+    });
+
     it("treats numbers as one numeric type, so arithmetic never needs 1.0", () => {
         expect(value("it + 1", {}, 4.5)).toBe(5.5);
         expect(test("rating * 2 > 7", { rating: 4 })).toBe(true);
