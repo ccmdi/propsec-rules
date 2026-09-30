@@ -22,7 +22,7 @@ function normalizeTags(raw: unknown): string[] {
 }
 
 /**
- * Build an Obsidian-free FileMeta plus the parsed frontmatter from raw file content.
+ * Build a FileMeta plus the parsed frontmatter from raw file content.
  * `path` must be corpus-relative with forward slashes.
  */
 export function buildFileMeta(input: BuildFileMetaInput): { meta: FileMeta; parsed: ParsedFrontmatter } {

@@ -1,6 +1,6 @@
-import { OBSIDIAN_NATIVE_PROPERTIES, type Config, type Field, type Schema, type TypeDef } from "../model";
+import type { Config, Field, Schema, TypeDef } from "../model";
 import { parseQuerySegments, type QueryCondition } from "./targeting";
-import type { ComparisonOperator, CustomType, PropertyFilter, PropertyOperator, PropsecConfig, SchemaField, SchemaMapping } from "./types";
+import { OBSIDIAN_NATIVE_PROPERTIES, type ComparisonOperator, type CustomType, type PropertyFilter, type PropertyOperator, type PropsecConfig, type SchemaField, type SchemaMapping } from "./types";
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEYWORDS = ["it", "file", "note", "true", "false", "null", "in"];

@@ -39,7 +39,7 @@ function rangeForViolation(violation: Violation, file: CorpusFile): Range {
 
 /**
  * Validate an in-memory corpus, producing position-aware violations.
- * Pure over CorpusFile[] — mirrors propsec's validator.ts but no fs/Obsidian.
+ * Pure over CorpusFile[].
  */
 export function validateCorpus(files: CorpusFile[], program: Program): LocatedViolation[] {
     const collected: { file: CorpusFile; violation: Violation }[] = [];

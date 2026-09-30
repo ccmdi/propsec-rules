@@ -125,6 +125,9 @@ export interface SchemaMapping {
     propertyFilter?: PropertyFilter;
 }
 
+// Obsidian's reserved frontmatter keys, what the older `allowObsidianProperties` flag allowed
+export const OBSIDIAN_NATIVE_PROPERTIES = ["aliases", "tags", "cssclasses", "cssclass"];
+
 export interface PropsecConfig {
     schemaMappings: SchemaMapping[];
     customTypes: CustomType[];

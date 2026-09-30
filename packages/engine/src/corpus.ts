@@ -25,7 +25,7 @@ const DEFAULT_IGNORE_DIRS = new Set(["node_modules"]);
 const FS_CONCURRENCY = 48;
 
 function isIgnoredDir(name: string, extraIgnores: Set<string>): boolean {
-    if (name.startsWith(".")) return true; // .obsidian, .propsec, .git, etc.
+    if (name.startsWith(".")) return true; // dot-folders like .git and .propsec
     if (DEFAULT_IGNORE_DIRS.has(name)) return true;
     return extraIgnores.has(name);
 }
@@ -55,8 +55,8 @@ interface FoundFile {
 
 /**
  * Recursively load all `*.md` files under `rootDir` into CorpusFiles.
- * Corpus-relative paths use forward slashes. Dirs starting with `.` (`.obsidian`,
- * `.propsec`, `.git`) and `node_modules` are ignored by default; pass
+ * Corpus-relative paths use forward slashes. Dirs starting with `.` (e.g. `.git`,
+ * `.propsec`) and `node_modules` are ignored by default; pass
  * `options.ignore` for more.
  *
  * Parse results are cached to `<rootDir>/.propsec/cache.json`, keyed by file

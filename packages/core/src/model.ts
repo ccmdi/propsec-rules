@@ -22,9 +22,6 @@ export type FieldType = string;
 
 export const PRIMITIVE_TYPES: PrimitiveFieldType[] = ["string", "number", "boolean", "date", "array", "object", "null", "unknown"];
 
-// Obsidian's reserved frontmatter keys
-export const OBSIDIAN_NATIVE_PROPERTIES = ["aliases", "tags", "cssclasses", "cssclass"];
-
 export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isPrimitiveType(type: string): type is PrimitiveFieldType {

@@ -16,4 +16,5 @@ export { describeRule } from "./describe";
 export type { Completion, CompletionResult, RuleCheck, RuleContext, RuleSlot } from "./authoring";
 
 export type * from "./legacy/types";
+export { OBSIDIAN_NATIVE_PROPERTIES } from "./legacy/types";
 export { migrate, readConfig } from "./legacy/migrate";
