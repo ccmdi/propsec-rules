@@ -114,7 +114,7 @@ function rank(items: Completion[], prefix: string): Completion[] {
     return [...starts, ...within];
 }
 
-export function completeRule(source: string, cursor: number, context: RuleContext): CompletionResult {
+export function completeRule(source: string, cursor: number, context: RuleContext, explicit = false): CompletionResult {
     const before = source.slice(0, cursor);
     const prefix = /[A-Za-z_][A-Za-z0-9_]*$/.exec(before)?.[0] ?? "";
     const from = cursor - prefix.length;
@@ -135,6 +135,7 @@ export function completeRule(source: string, cursor: number, context: RuleContex
     }
 
     const atStart = /(^|&&|\|\||[(!?:])\s*$/.test(lead);
+    if (!prefix && !atStart && !explicit) return empty;
     const helpers = atStart ? helpersFor(context) : [];
     const values: Completion[] = [
         ...(context.slot === "must" ? [{ label: "it", detail: "This field's value", insert: "it", kind: "value" as const }] : []),

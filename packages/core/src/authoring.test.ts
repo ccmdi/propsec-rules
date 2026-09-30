@@ -34,6 +34,12 @@ describe("rule authoring", () => {
         expect(labels("rating >= 1 && ra", { slot: "where", properties: ["rating", "title"] })[0]).toBe("rating");
     });
 
+    it("stays quiet mid-rule unless asked", () => {
+        expect(labels("rating > ", { slot: "where", properties: ["rating"] })).toEqual([]);
+        expect(completeRule("rating > ", 9, { slot: "where", properties: ["rating"] }, true).items.map(i => i.label)).toContain("rating");
+        expect(labels("rating > 3 && ", { slot: "where", properties: [] })[0]).toBe("in folder");
+    });
+
     it("completes file members and type-appropriate methods", () => {
         expect(labels("file.in", { slot: "where", properties: [] })).toEqual(["inFolder"]);
         const listMethods = labels("it.", { slot: "must", type: "array", properties: [] });
