@@ -1,6 +1,13 @@
 {
   "name": "@propsec/core",
   "version": "0.1.0",
+  "description": "Typed, queryable frontmatter rules for Markdown.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ccmdi/propsec-rules.git",
+    "directory": "packages/core"
+  },
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -9,6 +16,14 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/parity"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
